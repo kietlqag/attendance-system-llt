@@ -1,4 +1,4 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+﻿import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { firebaseDb } from '../../lib/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { firebaseAuth } from '../../lib/firebase';
@@ -178,6 +178,7 @@ const STORAGE_KEYS = {
 const GROUPS_COLLECTION = 'groups';
 const SESSIONS_COLLECTION = 'sessions';
 const STUDENT_ACCOUNTS_COLLECTION = 'studentAccounts';
+const RECORDS_COLLECTION = 'attendance_records';
 
 const adminSeedUsers: User[] = mockUsers.filter((user) => user.role === 'admin');
 
@@ -329,14 +330,27 @@ export const createSession = async (
   return newSession;
 };
 
+const normalizeToken = (token: string) => token.trim().toLowerCase();
+
 export const getSessionByToken = (token: string): AttendanceSession | null => {
+  const normalizedToken = normalizeToken(token);
   const sessions = getSessions();
-  return sessions.find(s => s.token === token) || null;
+  return sessions.find((s) => normalizeToken(s.token) === normalizedToken) || null;
 };
 
 export const getSessionByTokenFromFirebase = async (token: string): Promise<AttendanceSession | null> => {
-  const sessions = await getSessionsFromFirebase();
-  return sessions.find((s) => s.token === token) || null;
+  const normalizedToken = normalizeToken(token);
+  const localSession = getSessionByToken(token);
+  if (localSession) {
+    return localSession;
+  }
+
+  try {
+    const sessions = await getSessionsFromFirebase();
+    return sessions.find((s) => normalizeToken(s.token) === normalizedToken) || null;
+  } catch {
+    return null;
+  }
 };
 
 // Record functions
@@ -381,7 +395,63 @@ export const createRecord = (
 
   records.push(newRecord);
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+
+  void addRecordToFirestore({
+    sessionId: newRecord.sessionId,
+    userId: newRecord.userId,
+    timestamp: newRecord.timestamp,
+    status: newRecord.status,
+  }).catch(() => {
+    // Firestore sync is best-effort for realtime admin updates.
+  });
+
   return { success: true, message: 'Điểm danh thành công', record: newRecord };
+};
+
+export const addRecordToFirestore = async (
+  record: Omit<AttendanceRecord, 'id'>
+): Promise<AttendanceRecord> => {
+  const recordRef = await addDoc(collection(firebaseDb, RECORDS_COLLECTION), {
+    sessionId: record.sessionId,
+    userId: record.userId,
+    timestamp: record.timestamp.toISOString(),
+    status: record.status,
+  });
+
+  return {
+    id: recordRef.id,
+    ...record,
+  };
+};
+
+export const subscribeRecordsBySession = (
+  sessionId: string,
+  callback: (records: AttendanceRecord[]) => void
+) => {
+  const recordsQuery = query(
+    collection(firebaseDb, RECORDS_COLLECTION),
+    where('sessionId', '==', sessionId)
+  );
+
+  return onSnapshot(recordsQuery, (snapshot) => {
+    const realtimeRecords: AttendanceRecord[] = snapshot.docs.map((recordDoc) => {
+      const data = recordDoc.data() as {
+        sessionId: string;
+        userId: string;
+        timestamp: string;
+        status: AttendanceRecord['status'];
+      };
+      return {
+        id: recordDoc.id,
+        sessionId: data.sessionId,
+        userId: data.userId,
+        timestamp: new Date(data.timestamp),
+        status: data.status,
+      };
+    });
+
+    callback(realtimeRecords);
+  });
 };
 
 export const getRecordsBySession = (sessionId: string): AttendanceRecord[] => {

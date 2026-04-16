@@ -9,6 +9,7 @@ import { vi } from 'date-fns/locale';
 
 export function UserDashboard() {
   const [recentAttendance, setRecentAttendance] = useState<any[]>([]);
+  const [attendanceCount, setAttendanceCount] = useState({ today: 0, thisMonth: 0, total: 0 });
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -16,6 +17,12 @@ export function UserDashboard() {
 
     const records = getRecordsByUser(currentUser.id);
     const sessions = getSessions();
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const todayCount = records.filter((r) => r.timestamp >= todayStart).length;
+    const monthCount = records.filter((r) => r.timestamp >= monthStart).length;
 
     const recent = records
       .slice()
@@ -29,6 +36,7 @@ export function UserDashboard() {
         };
       });
 
+    setAttendanceCount({ today: todayCount, thisMonth: monthCount, total: records.length });
     setRecentAttendance(recent);
   }, []);
 
@@ -45,6 +53,7 @@ export function UserDashboard() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg mb-1">Quét mã điểm danh</h3>
                   <p className="text-sm text-muted-foreground">Quét QR code hoặc nhập mã thủ công</p>
+                  <p className="text-xs text-muted-foreground mt-2">Hôm nay: {attendanceCount.today} | Tháng này: {attendanceCount.thisMonth} | Tổng: {attendanceCount.total}</p>
                 </div>
               </div>
             </CardContent>
@@ -61,6 +70,7 @@ export function UserDashboard() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg mb-1">Xem lịch sử</h3>
                   <p className="text-sm text-muted-foreground">Kiểm tra lịch sử điểm danh của bạn</p>
+                  <p className="text-xs text-muted-foreground mt-2">Bạn đã điểm danh {attendanceCount.total} lần</p>
                 </div>
               </div>
             </CardContent>

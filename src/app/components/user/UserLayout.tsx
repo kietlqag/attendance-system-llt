@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router';
-import { getCurrentUser, logout } from '../../utils/mockData';
+import { getCurrentUser, getStudentAccounts, logout } from '../../utils/mockData';
 import { Button } from '../ui/button';
 import { LogOut, Home, QrCode, History, Menu, X, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,6 +24,15 @@ export function UserLayout() {
   };
 
   const currentUser = getCurrentUser();
+  const currentStudent = currentUser
+    ? getStudentAccounts().find(
+        (account) =>
+          account.userId === currentUser.id ||
+          account.email === currentUser.email ||
+          account.fullName === currentUser.name
+      )
+    : undefined;
+  const currentStudentId = currentStudent?.studentId || (currentUser?.id?.startsWith('sv_') ? currentUser.id.replace(/^sv_/, '') : '');
 
   const menuItems = [
     {
@@ -53,17 +62,12 @@ export function UserLayout() {
       >
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center flex-shrink-0">
-                <CheckCircle2 className="w-7 h-7 text-white" />
+            {sidebarOpen && (
+              <div className="space-y-1 text-center">
+                <p className="text-sm font-semibold truncate">{currentStudentId}</p>
+                <p className="text-xs text-muted-foreground truncate">{currentUser?.name}</p>
               </div>
-              {sidebarOpen && (
-                <div className="min-w-0 flex-1">
-                  <h1 className="font-bold text-gray-900 truncate">Hệ Thống Điểm Danh</h1>
-                  <p className="text-xs text-muted-foreground truncate">Xin chào, {currentUser?.name}</p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           <nav className="flex-1 p-4 space-y-2">

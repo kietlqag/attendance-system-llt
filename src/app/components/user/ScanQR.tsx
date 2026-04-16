@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -53,13 +53,13 @@ export function ScanQR() {
     }
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!manualToken.trim()) {
       toast.error('Vui lòng nhập mã điểm danh');
       return;
     }
-    void handleAttendance(manualToken.trim());
+    await handleAttendance(manualToken.trim());
   };
 
   const startScanner = async () => {

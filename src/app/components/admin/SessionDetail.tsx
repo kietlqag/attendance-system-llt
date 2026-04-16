@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { getSessionsFromFirebase, getRecordsBySession, getGroupsFromFirebase, getUserById } from '../../utils/mockData';
+import { getSessionsFromFirebase, getGroupsFromFirebase, getUserById, subscribeRecordsBySession } from '../../utils/mockData';
 import { QRCodeSVG } from 'qrcode.react';
 import { Calendar, Clock, Users, Download, Copy, ArrowLeft, QrCode } from 'lucide-react';
 import { format } from 'date-fns';
@@ -18,21 +18,28 @@ export function SessionDetail() {
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
+  const qrRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
     const loadData = async () => {
       if (sessionId) {
         const sessions = await getSessionsFromFirebase();
         const foundSession = sessions.find(s => s.id === sessionId);
         if (foundSession) {
           setSession(foundSession);
-          setRecords(getRecordsBySession(sessionId));
+          unsubscribe = subscribeRecordsBySession(sessionId, setRecords);
         }
       }
       setGroups(await getGroupsFromFirebase());
     };
 
     void loadData();
+
+    return () => {
+      unsubscribe?.();
+    };
   }, [sessionId]);
 
   if (!session) {
@@ -55,15 +62,46 @@ export function SessionDetail() {
   };
 
   const downloadQR = () => {
-    const canvas = document.querySelector('canvas');
-    if (canvas) {
-      const url = canvas.toDataURL('image/png');
+    const svg = qrRef.current?.querySelector('svg');
+    if (!svg) {
+      toast.error('Không tìm thấy QR code');
+      return;
+    }
+
+    const svgString = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    const size = 240;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      toast.error('Không thể tạo hình ảnh QR code');
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      ctx.clearRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      const pngUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = `QR-${session.token}.png`;
-      link.href = url;
+      link.href = pngUrl;
       link.click();
       toast.success('Đã tải QR code');
-    }
+    };
+
+    img.onerror = () => {
+      toast.error('Không thể tải QR code');
+      URL.revokeObjectURL(url);
+    };
+
+    img.src = url;
   };
 
   const exportToCSV = () => {
@@ -128,17 +166,25 @@ export function SessionDetail() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
-                <span className="text-sm">Ngày</span>
+                <span className="text-sm">Thời gian bắt đầu</span>
               </div>
-              <p className="font-semibold">{format(session.startTime, 'dd/MM/yyyy', { locale: vi })}</p>
+              <p className="font-semibold">
+                {format(session.startTime, 'HH:mm', { locale: vi })} -{' '}
+                <span className="font-semibold text-sm">
+                  {format(session.startTime, 'dd/MM/yyyy', { locale: vi })}
+                </span>
+              </p>
             </div>
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="w-4 h-4" />
-                <span className="text-sm">Thời gian</span>
+                <span className="text-sm">Thời gian kết thúc</span>
               </div>
               <p className="font-semibold">
-                {format(session.startTime, 'HH:mm', { locale: vi })} - {format(session.endTime, 'HH:mm', { locale: vi })}
+                {format(session.endTime, 'HH:mm', { locale: vi })} -{' '}
+                <span className="font-semibold text-sm">
+                  {format(session.endTime, 'dd/MM/yyyy', { locale: vi })}
+                </span>
               </p>
             </div>
             <div className="space-y-3">
@@ -165,7 +211,7 @@ export function SessionDetail() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-4">
-            <div className="bg-white p-6 rounded-xl border-4 border-primary/20">
+            <div ref={qrRef} className="bg-white p-6 rounded-xl border-4 border-primary/20">
               <QRCodeSVG
                 value={session.token}
                 size={240}

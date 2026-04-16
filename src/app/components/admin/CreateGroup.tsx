@@ -4,10 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
 import { createGroup, importStudentsToGroup, type ImportedStudentRow } from '../../utils/mockData';
 import { toast } from 'sonner';
-import { Users, FileText, Upload, FileSpreadsheet, Download } from 'lucide-react';
+import { Users, Upload, FileSpreadsheet, Download } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { firebaseAuth } from '../../../lib/firebase';
@@ -60,7 +59,6 @@ export function CreateGroup() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
   });
   const [importRows, setImportRows] = useState<ImportedStudentRow[]>([]);
   const [selectedFileName, setSelectedFileName] = useState('');
@@ -135,7 +133,7 @@ export function CreateGroup() {
     try {
       const newGroup = await createGroup({
         name: formData.name.trim(),
-        description: formData.description.trim(),
+        description: '',
         memberIds: [],
       });
 
@@ -186,21 +184,6 @@ export function CreateGroup() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="bg-input-background"
                 required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description" className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Mô tả (tùy chọn)
-              </Label>
-              <Textarea
-                id="description"
-                placeholder="VD: Lớp học Lập Trình Web - Khóa 2024-2026"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="bg-input-background min-h-[100px]"
-                rows={4}
               />
             </div>
 

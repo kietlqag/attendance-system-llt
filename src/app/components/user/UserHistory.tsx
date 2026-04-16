@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+﻿import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { getCurrentUser, getRecordsByUser, getSessions } from '../../utils/mockData';
+import { getCurrentUser, getRecordsFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
 import { CheckCircle, Calendar, Clock, Search, Filter } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -16,24 +16,32 @@ export function UserHistory() {
   const [filterPeriod, setFilterPeriod] = useState('all');
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) return;
+    const load = async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return;
 
-    const userRecords = getRecordsByUser(currentUser.id);
-    const sessions = getSessions();
+      const [allRecords, sessions] = await Promise.all([
+        getRecordsFromFirebase(),
+        getSessionsFromFirebase(),
+      ]);
 
-    const recordsWithSession = userRecords
-      .map((record) => {
-        const session = sessions.find((s) => s.id === record.sessionId);
-        return {
-          ...record,
-          sessionName: session?.name || 'Không xác định',
-        };
-      })
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      const userRecords = allRecords.filter((record) => record.userId === currentUser.id);
 
-    setRecords(recordsWithSession);
-    setFilteredRecords(recordsWithSession);
+      const recordsWithSession = userRecords
+        .map((record) => {
+          const session = sessions.find((s) => s.id === record.sessionId);
+          return {
+            ...record,
+            sessionName: session?.name || 'Không xác định',
+          };
+        })
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      setRecords(recordsWithSession);
+      setFilteredRecords(recordsWithSession);
+    };
+
+    void load();
   }, []);
 
   useEffect(() => {
@@ -107,7 +115,9 @@ export function UserHistory() {
           <CardContent className="py-12 text-center">
             <CheckCircle className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
-              {searchTerm || filterPeriod !== 'all' ? 'Không tìm thấy kết quả phù hợp' : 'Bạn chưa có lịch sử điểm danh'}
+              {searchTerm || filterPeriod !== 'all'
+                ? 'Không tìm thấy kết quả phù hợp'
+                : 'Bạn chưa có lịch sử điểm danh'}
             </p>
           </CardContent>
         </Card>
@@ -120,7 +130,6 @@ export function UserHistory() {
                   <Calendar className="w-5 h-5" />
                   {date}
                 </CardTitle>
-                <CardDescription>{dateRecords.length} lần điểm danh</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">

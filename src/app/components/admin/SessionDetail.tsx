@@ -1,46 +1,92 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+﻿import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { QRCodeSVG } from 'qrcode.react';
+import { Calendar, Clock, Copy, Download, QrCode, Users, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { getSessionsFromFirebase, getGroupsFromFirebase, getUserById, subscribeRecordsBySession } from '../../utils/mockData';
-import { QRCodeSVG } from 'qrcode.react';
-import { Calendar, Clock, Users, Download, Copy, ArrowLeft, QrCode } from 'lucide-react';
-import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
-import { toast } from 'sonner';
-import type { AttendanceSession, AttendanceRecord } from '../../utils/mockData';
+import {
+  getGroupsFromFirebase,
+  getRecordsBySessionFromFirebase,
+  getSessionsFromFirebase,
+  getStudentAccountsFromFirebase,
+  getUserById,
+  subscribeRecordsBySession,
+} from '../../utils/mockData';
+import type { AttendanceRecord, AttendanceSession, StudentAccount, Group } from '../../utils/mockData';
 
 export function SessionDetail() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const qrRef = useRef<HTMLDivElement | null>(null);
+
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const qrRef = useRef<HTMLDivElement | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [studentAccounts, setStudentAccounts] = useState<StudentAccount[]>([]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let pollTimer: ReturnType<typeof setInterval> | undefined;
 
-    const loadData = async () => {
-      if (sessionId) {
-        const sessions = await getSessionsFromFirebase();
-        const foundSession = sessions.find(s => s.id === sessionId);
-        if (foundSession) {
-          setSession(foundSession);
-          unsubscribe = subscribeRecordsBySession(sessionId, setRecords);
-        }
+    const load = async () => {
+      if (!sessionId) return;
+
+      const [allSessions, allGroups, allStudentAccounts] = await Promise.all([
+        getSessionsFromFirebase(),
+        getGroupsFromFirebase(),
+        getStudentAccountsFromFirebase(),
+      ]);
+
+      setGroups(allGroups);
+      setStudentAccounts(allStudentAccounts);
+
+      const found = allSessions.find((s) => s.id === sessionId) || null;
+      setSession(found);
+      if (!found) return;
+
+      try {
+        const initial = await getRecordsBySessionFromFirebase(sessionId);
+        setRecords(initial);
+      } catch {
+        setRecords([]);
       }
-      setGroups(await getGroupsFromFirebase());
+
+      unsubscribe = subscribeRecordsBySession(sessionId, setRecords);
+
+      // Fallback polling in case realtime stream is delayed or interrupted.
+      pollTimer = setInterval(() => {
+        void getRecordsBySessionFromFirebase(sessionId)
+          .then(setRecords)
+          .catch(() => undefined);
+      }, 5000);
     };
 
-    void loadData();
+    void load();
 
     return () => {
       unsubscribe?.();
+      if (pollTimer) clearInterval(pollTimer);
     };
   }, [sessionId]);
+
+  const resolveStudentId = (record: AttendanceRecord) => {
+    if (record.userId.startsWith('sv_')) {
+      return record.userId.replace(/^sv_/, '');
+    }
+
+    const user = getUserById(record.userId);
+    const account = studentAccounts.find(
+      (item) => item.userId === record.userId || (user?.email && item.email === user.email)
+    );
+
+    return account?.studentId || 'N/A';
+  };
 
   if (!session) {
     return (
@@ -50,10 +96,9 @@ export function SessionDetail() {
     );
   }
 
-  const group = groups.find(g => g.id === session.groupId);
+  const group = groups.find((g) => g.id === session.groupId);
   const now = new Date();
   const isActive = now >= session.startTime && now <= session.endTime;
-  const isUpcoming = now < session.startTime;
   const isExpired = now > session.endTime;
 
   const copyToken = () => {
@@ -74,6 +119,7 @@ export function SessionDetail() {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
+
     if (!ctx) {
       toast.error('Không thể tạo hình ảnh QR code');
       return;
@@ -81,35 +127,35 @@ export function SessionDetail() {
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
 
     img.onload = () => {
       ctx.clearRect(0, 0, size, size);
       ctx.drawImage(img, 0, 0, size, size);
       URL.revokeObjectURL(url);
-      const pngUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = `QR-${session.token}.png`;
-      link.href = pngUrl;
+      link.href = canvas.toDataURL('image/png');
       link.click();
       toast.success('Đã tải QR code');
     };
 
     img.onerror = () => {
-      toast.error('Không thể tải QR code');
       URL.revokeObjectURL(url);
+      toast.error('Không thể tải QR code');
     };
 
     img.src = url;
   };
 
   const exportToCSV = () => {
-    const headers = ['STT', 'Họ tên', 'Email', 'Thời gian điểm danh', 'Trạng thái'];
+    const headers = ['STT', 'MSSV', 'Họ tên', 'Email', 'Thời gian điểm danh', 'Trạng thái'];
     const rows = records.map((record, index) => {
       const user = getUserById(record.userId);
       return [
         index + 1,
+        resolveStudentId(record),
         user?.name || 'N/A',
         user?.email || 'N/A',
         format(record.timestamp, 'HH:mm:ss dd/MM/yyyy', { locale: vi }),
@@ -117,12 +163,8 @@ export function SessionDetail() {
       ];
     });
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(',')),
-    ].join('\n');
-
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `diemdanh-${session.token}.csv`;
@@ -132,21 +174,17 @@ export function SessionDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={() => navigate('/admin')} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
           Quay lại
         </Button>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportToCSV} className="gap-2">
-            <Download className="w-4 h-4" />
-            Xuất Excel
-          </Button>
-        </div>
+        <Button variant="outline" onClick={exportToCSV} className="gap-2">
+          <Download className="w-4 h-4" />
+          Xuất Excel
+        </Button>
       </div>
 
-      {/* Session Info */}
       <Card className="border-2 border-primary/20">
         <CardHeader>
           <div className="flex items-start justify-between">
@@ -157,7 +195,7 @@ export function SessionDetail() {
                   {isActive ? 'Đang diễn ra' : isExpired ? 'Đã kết thúc' : 'Sắp diễn ra'}
                 </Badge>
               </div>
-              <CardDescription className="text-base">{group?.name || 'Không có nhóm'}</CardDescription>
+              <p className="text-base text-muted-foreground">{group?.name || 'Không có nhóm'}</p>
             </div>
           </div>
         </CardHeader>
@@ -170,11 +208,10 @@ export function SessionDetail() {
               </div>
               <p className="font-semibold">
                 {format(session.startTime, 'HH:mm', { locale: vi })} -{' '}
-                <span className="font-semibold text-sm">
-                  {format(session.startTime, 'dd/MM/yyyy', { locale: vi })}
-                </span>
+                <span className="font-semibold text-sm">{format(session.startTime, 'dd/MM/yyyy', { locale: vi })}</span>
               </p>
             </div>
+
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="w-4 h-4" />
@@ -182,11 +219,10 @@ export function SessionDetail() {
               </div>
               <p className="font-semibold">
                 {format(session.endTime, 'HH:mm', { locale: vi })} -{' '}
-                <span className="font-semibold text-sm">
-                  {format(session.endTime, 'dd/MM/yyyy', { locale: vi })}
-                </span>
+                <span className="font-semibold text-sm">{format(session.endTime, 'dd/MM/yyyy', { locale: vi })}</span>
               </p>
             </div>
+
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Users className="w-4 h-4" />
@@ -198,7 +234,6 @@ export function SessionDetail() {
         </CardContent>
       </Card>
 
-      {/* QR Code */}
       <div className="grid md:grid-cols-2 gap-6">
         <Card className="border-2">
           <CardHeader>
@@ -206,18 +241,10 @@ export function SessionDetail() {
               <QrCode className="w-5 h-5" />
               QR Code điểm danh
             </CardTitle>
-            <CardDescription>
-              Chiếu mã này để sinh viên quét
-            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-4">
             <div ref={qrRef} className="bg-white p-6 rounded-xl border-4 border-primary/20">
-              <QRCodeSVG
-                value={session.token}
-                size={240}
-                level="H"
-                includeMargin={false}
-              />
+              <QRCodeSVG value={session.token} size={240} level="H" includeMargin={false} />
             </div>
             <Button onClick={downloadQR} variant="outline" className="w-full gap-2">
               <Download className="w-4 h-4" />
@@ -229,15 +256,10 @@ export function SessionDetail() {
         <Card className="border-2">
           <CardHeader>
             <CardTitle>Mã điểm danh</CardTitle>
-            <CardDescription>
-              Sinh viên có thể nhập mã này thủ công
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-muted p-6 rounded-lg text-center">
-              <p className="text-3xl font-mono font-bold text-primary tracking-wider">
-                {session.token}
-              </p>
+              <p className="text-3xl font-mono font-bold text-primary tracking-wider">{session.token}</p>
             </div>
             <Button onClick={copyToken} variant="outline" className="w-full gap-2">
               <Copy className="w-4 h-4" />
@@ -255,13 +277,9 @@ export function SessionDetail() {
         </Card>
       </div>
 
-      {/* Attendance List */}
       <Card className="border-2">
         <CardHeader>
           <CardTitle>Danh sách đã điểm danh ({records.length})</CardTitle>
-          <CardDescription>
-            Cập nhật theo thời gian thực
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {records.length === 0 ? (
@@ -275,6 +293,7 @@ export function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">STT</TableHead>
+                    <TableHead>MSSV</TableHead>
                     <TableHead>Họ tên</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Thời gian</TableHead>
@@ -287,10 +306,11 @@ export function SessionDetail() {
                     return (
                       <TableRow key={record.id}>
                         <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell className="font-medium">{resolveStudentId(record)}</TableCell>
                         <TableCell className="font-medium">{user?.name || 'N/A'}</TableCell>
                         <TableCell className="text-muted-foreground">{user?.email || 'N/A'}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {format(record.timestamp, 'HH:mm:ss', { locale: vi })}
+                          {format(record.timestamp, 'HH:mm:ss dd/MM/yyyy', { locale: vi })}
                         </TableCell>
                         <TableCell className="text-right">
                           <Badge variant={record.status === 'valid' ? 'default' : 'destructive'}>
@@ -309,4 +329,3 @@ export function SessionDetail() {
     </div>
   );
 }
-

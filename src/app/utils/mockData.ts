@@ -1,10 +1,19 @@
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { firebaseDb } from '../../lib/firebase';
+﻿import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 import { signInAnonymously, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { firebaseAuth } from '../../lib/firebase';
 
-// Mock data vÃ  state quáº£n lÃ½ cho há»‡ thá»‘ng Ä‘iá»ƒm danh
-
+import { firebaseAuth, firebaseDb } from '../../lib/firebase';
 
 export interface User {
   id: string;
@@ -15,7 +24,7 @@ export interface User {
 }
 
 export interface StudentAccount {
-  studentId: string; // MSSV
+  studentId: string;
   fullName: string;
   email: string;
   password: string;
@@ -55,117 +64,6 @@ export interface Group {
   memberIds: string[];
 }
 
-// StudentAccount table (fixed)
-export const studentAccounts: StudentAccount[] = [
-  {
-    studentId: '21110001',
-    fullName: 'Tran Thi Binh',
-    email: 'user1@example.com',
-    password: 'user123',
-    userId: 'user1',
-  },
-  {
-    studentId: '21110002',
-    fullName: 'Le Van Cuong',
-    email: 'user2@example.com',
-    password: 'user123',
-    userId: 'user2',
-  },
-  {
-    studentId: '21110003',
-    fullName: 'Pham Thi Dung',
-    email: 'user3@example.com',
-    password: 'user123',
-    userId: 'user3',
-  },
-];
-const mapStudentAccountsToUsers = (accounts: StudentAccount[]): User[] =>
-  accounts.map((account) => ({
-    id: account.userId,
-    name: account.fullName,
-    email: account.email,
-    role: 'user',
-    password: account.password,
-  }));
-
-const studentUsersFromAccounts: User[] = mapStudentAccountsToUsers(studentAccounts);
-// Mock users
-export const mockUsers: User[] = [
-  {
-    id: 'admin1',
-    name: 'Nguyen Van An',
-    email: 'admin@example.com',
-    role: 'admin',
-    password: 'admin123',
-  },
-  ...studentUsersFromAccounts,
-];
-// Mock groups
-export const mockGroups: Group[] = [
-  {
-    id: 'group1',
-    name: 'Lá»›p Láº­p TrÃ¬nh Web',
-    description: 'Lá»›p há»c Láº­p TrÃ¬nh Web 2026',
-    memberIds: ['user1', 'user2', 'user3'],
-  },
-  {
-    id: 'group2',
-    name: 'PhÃ²ng IT',
-    description: 'PhÃ²ng cÃ´ng nghá»‡ thÃ´ng tin',
-    memberIds: ['user1', 'user2'],
-  },
-];
-
-// Mock attendance sessions
-export const mockSessions: AttendanceSession[] = [
-  {
-    id: 'session1',
-    name: 'Buá»•i há»c sá»‘ 1 - Láº­p TrÃ¬nh Web',
-    token: 'ATT-2026-001',
-    startTime: new Date('2026-04-16T08:00:00'),
-    endTime: new Date('2026-04-16T10:00:00'),
-    groupId: 'group1',
-    createdBy: 'admin1',
-    status: 'active',
-  },
-  {
-    id: 'session2',
-    name: 'Há»p team IT',
-    token: 'ATT-2026-002',
-    startTime: new Date('2026-04-15T14:00:00'),
-    endTime: new Date('2026-04-15T16:00:00'),
-    groupId: 'group2',
-    createdBy: 'admin1',
-    status: 'expired',
-  },
-];
-
-// Mock attendance records
-export const mockRecords: AttendanceRecord[] = [
-  {
-    id: 'record1',
-    sessionId: 'session1',
-    userId: 'user1',
-    timestamp: new Date('2026-04-16T08:05:00'),
-    status: 'valid',
-  },
-  {
-    id: 'record2',
-    sessionId: 'session1',
-    userId: 'user2',
-    timestamp: new Date('2026-04-16T08:10:00'),
-    status: 'valid',
-  },
-  {
-    id: 'record3',
-    sessionId: 'session2',
-    userId: 'user1',
-    timestamp: new Date('2026-04-15T14:05:00'),
-    status: 'valid',
-  },
-];
-
-// Storage keys
 const STORAGE_KEYS = {
   CURRENT_USER: 'attendance_current_user',
   SESSIONS: 'attendance_sessions',
@@ -180,60 +78,69 @@ const SESSIONS_COLLECTION = 'sessions';
 const STUDENT_ACCOUNTS_COLLECTION = 'studentAccounts';
 const RECORDS_COLLECTION = 'attendance_records';
 
-const adminSeedUsers: User[] = mockUsers.filter((user) => user.role === 'admin');
-
-// Initialize localStorage with mock data
-export const initializeMockData = () => {
-  if (!localStorage.getItem(STORAGE_KEYS.STUDENT_ACCOUNTS)) {
-    localStorage.setItem(STORAGE_KEYS.STUDENT_ACCOUNTS, JSON.stringify(studentAccounts));
-  }
-
-  if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-    const storedAccounts = JSON.parse(
-      localStorage.getItem(STORAGE_KEYS.STUDENT_ACCOUNTS) || '[]'
-    ) as StudentAccount[];
-    localStorage.setItem(
-      STORAGE_KEYS.USERS,
-      JSON.stringify([...adminSeedUsers, ...mapStudentAccountsToUsers(storedAccounts)])
-    );
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.GROUPS)) {
-    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(mockGroups));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.SESSIONS)) {
-    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(mockSessions));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.RECORDS)) {
-    localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(mockRecords));
-  }
-};
-
-export const getStudentAccounts = (): StudentAccount[] => {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENT_ACCOUNTS) || '[]');
-};
-
-const setStudentAccounts = (accounts: StudentAccount[]) => {
+const setStudentAccountsCache = (accounts: StudentAccount[]) => {
   localStorage.setItem(STORAGE_KEYS.STUDENT_ACCOUNTS, JSON.stringify(accounts));
+  const users: User[] = accounts.map((account) => ({
+    id: account.userId,
+    name: account.fullName,
+    email: account.email,
+    role: 'user',
+    password: account.password,
+  }));
+  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
 };
 
-export const getStudentAccountsFromFirebase = async (): Promise<StudentAccount[]> => {
-  const snapshot = await getDocs(collection(firebaseDb, STUDENT_ACCOUNTS_COLLECTION));
-  const accounts: StudentAccount[] = snapshot.docs.map((accountDoc) => {
-    const data = accountDoc.data() as Partial<StudentAccount>;
-    return {
-      studentId: String(data.studentId || accountDoc.id).trim(),
-      fullName: String(data.fullName || '').trim(),
-      email: String(data.email || '').trim().toLowerCase(),
-      password: String(data.password || ''),
-      userId: String(data.userId || `sv_${String(data.studentId || accountDoc.id).trim()}`),
-    };
-  });
-
-  setStudentAccounts(accounts);
-  return accounts;
+const setGroupsCache = (groups: Group[]) => {
+  localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
 };
 
-// Auth functions
+const setSessionsCache = (sessions: AttendanceSession[]) => {
+  localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+};
+
+const setRecordsCache = (records: AttendanceRecord[]) => {
+  localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+};
+
+const toDateValue = (value: unknown): Date => {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate: () => Date }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return new Date(String(value));
+};
+
+const normalizeToken = (token: string) =>
+  token
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+    .trim()
+    .toLowerCase();
+
+const ensureFirebaseAuthSession = async () => {
+  if (firebaseAuth.currentUser) {
+    return;
+  }
+
+  await signInAnonymously(firebaseAuth);
+};
+
+export const initializeMockData = () => {
+  // Firebase-only mode: do not seed any mock data.
+};
+
+export const getCurrentUser = (): User | null => {
+  const userStr = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+  return userStr ? (JSON.parse(userStr) as User) : null;
+};
+
 export const login = async (studentId: string, password: string): Promise<User | null> => {
   const normalizedStudentId = studentId.trim();
   if (!normalizedStudentId || !password) {
@@ -269,16 +176,15 @@ export const loginAdminWithFirebase = async (email: string, password: string): P
 
   try {
     const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
-    const firebaseEmail = credential.user.email ?? normalizedEmail;
-    const adminUser: User = {
+    const user: User = {
       id: `firebase-admin-${credential.user.uid}`,
       name: credential.user.displayName || 'Quản trị viên',
-      email: firebaseEmail,
+      email: credential.user.email || normalizedEmail,
       role: 'admin',
       password: '',
     };
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(adminUser));
-    return adminUser;
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+    return user;
   } catch {
     return null;
   }
@@ -289,295 +195,49 @@ export const logout = () => {
   signOut(firebaseAuth).catch(() => undefined);
 };
 
-export const getCurrentUser = (): User | null => {
-  const userStr = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-  return userStr ? JSON.parse(userStr) : null;
+export const getStudentAccounts = (): StudentAccount[] => {
+  return JSON.parse(localStorage.getItem(STORAGE_KEYS.STUDENT_ACCOUNTS) || '[]') as StudentAccount[];
 };
 
-// Session functions
-export const getSessions = (): AttendanceSession[] => {
-  const sessions = JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || '[]');
-  return sessions.map((s: any) => ({
-    ...s,
-    startTime: new Date(s.startTime),
-    endTime: new Date(s.endTime),
+export const getStudentAccountsFromFirebase = async (): Promise<StudentAccount[]> => {
+  const snapshot = await getDocs(collection(firebaseDb, STUDENT_ACCOUNTS_COLLECTION));
+  const accounts: StudentAccount[] = snapshot.docs.map((accountDoc) => {
+    const data = accountDoc.data() as Partial<StudentAccount>;
+    const studentId = String(data.studentId || accountDoc.id).trim();
+    return {
+      studentId,
+      fullName: String(data.fullName || '').trim(),
+      email: String(data.email || '').trim().toLowerCase(),
+      password: String(data.password || ''),
+      userId: String(data.userId || `sv_${studentId}`),
+    };
+  });
+
+  setStudentAccountsCache(accounts);
+  return accounts;
+};
+
+export const getUsers = (): User[] => {
+  return JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]') as User[];
+};
+
+export const getUsersFromFirebase = async (): Promise<User[]> => {
+  const accounts = await getStudentAccountsFromFirebase();
+  return accounts.map((account) => ({
+    id: account.userId,
+    name: account.fullName,
+    email: account.email,
+    role: 'user',
+    password: account.password,
   }));
 };
 
-export const createSession = async (
-  session: Omit<AttendanceSession, 'id' | 'token'>
-): Promise<AttendanceSession> => {
-  const sessions = getSessions();
-  const token = `ATT-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-
-  const sessionRef = await addDoc(collection(firebaseDb, SESSIONS_COLLECTION), {
-    name: session.name,
-    token,
-    startTime: session.startTime.toISOString(),
-    endTime: session.endTime.toISOString(),
-    groupId: session.groupId,
-    createdBy: session.createdBy,
-    status: session.status,
-  });
-
-  const newSession: AttendanceSession = {
-    ...session,
-    id: sessionRef.id,
-    token,
-  };
-  sessions.push(newSession);
-  setSessionsCache(sessions);
-  return newSession;
+export const getUserById = (userId: string): User | undefined => {
+  return getUsers().find((u) => u.id === userId);
 };
 
-const normalizeToken = (token: string) =>
-  token
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
-    .trim()
-    .toLowerCase();
-
-const ensureFirebaseAuthSession = async () => {
-  if (firebaseAuth.currentUser) {
-    return;
-  }
-
-  await signInAnonymously(firebaseAuth);
-};
-
-export const getSessionByToken = (token: string): AttendanceSession | null => {
-  const normalizedToken = normalizeToken(token);
-  const sessions = getSessions();
-  return sessions.find((s) => normalizeToken(s.token) === normalizedToken) || null;
-};
-
-export const getSessionByTokenFromFirebase = async (token: string): Promise<AttendanceSession | null> => {
-  const normalizedToken = normalizeToken(token);
-  const localSession = getSessionByToken(token);
-  if (localSession) {
-    return localSession;
-  }
-
-  await ensureFirebaseAuthSession();
-
-  try {
-    const exactTokenQuery = query(
-      collection(firebaseDb, SESSIONS_COLLECTION),
-      where('token', '==', token.trim())
-    );
-    const exactSnapshot = await getDocs(exactTokenQuery);
-    if (!exactSnapshot.empty) {
-      const sessionDoc = exactSnapshot.docs[0];
-      const data = sessionDoc.data() as {
-        name?: string;
-        token?: string;
-        startTime?: unknown;
-        endTime?: unknown;
-        groupId?: string;
-        createdBy?: string;
-        status?: AttendanceSession['status'];
-      };
-
-      const startTime = toDateValue(data.startTime);
-      const endTime = toDateValue(data.endTime);
-      const now = new Date();
-      const computedStatus: AttendanceSession['status'] = now > endTime ? 'expired' : 'active';
-      const session: AttendanceSession = {
-        id: sessionDoc.id,
-        name: data.name || '',
-        token: data.token || '',
-        startTime,
-        endTime,
-        groupId: data.groupId || '',
-        createdBy: data.createdBy || '',
-        status: data.status || computedStatus,
-      };
-      return session;
-    }
-
-    const sessions = await getSessionsFromFirebase();
-    return sessions.find((s) => normalizeToken(s.token) === normalizedToken) || null;
-  } catch (error) {
-    throw error;
-  }
-};
-
-// Record functions
-export const getRecords = (): AttendanceRecord[] => {
-  const records = JSON.parse(localStorage.getItem(STORAGE_KEYS.RECORDS) || '[]');
-  return records.map((r: any) => ({
-    ...r,
-    timestamp: new Date(r.timestamp),
-  }));
-};
-
-export const createRecord = async (
-  sessionId: string,
-  userId: string,
-  sessionOverride?: AttendanceSession
-): Promise<{ success: boolean; message: string; record?: AttendanceRecord }> => {
-  const session = sessionOverride || getSessions().find((s) => s.id === sessionId);
-  if (!session) {
-    return { success: false, message: 'Phiên điểm danh không tồn tại' };
-  }
-
-  const now = new Date();
-  if (now < session.startTime) {
-    return { success: false, message: 'Phiên điểm danh chưa bắt đầu' };
-  }
-  if (now > session.endTime) {
-    return { success: false, message: 'Phiên điểm danh đã kết thúc' };
-  }
-  try {
-    await ensureFirebaseAuthSession();
-  } catch {
-    return { success: false, message: 'Khong the ket noi du lieu diem danh' };
-  }
-
-  try {
-    const groupSnapshot = await getDoc(doc(firebaseDb, GROUPS_COLLECTION, session.groupId));
-    if (groupSnapshot.exists()) {
-      const groupData = groupSnapshot.data() as { memberIds?: string[] };
-      const memberIds = Array.isArray(groupData.memberIds) ? groupData.memberIds : [];
-      if (!memberIds.includes(userId)) {
-        return { success: false, message: 'Bạn không thuộc nhóm của phiên điểm danh này' };
-      }
-    }
-  } catch {
-    // Keep attendance available even if membership check cannot be loaded.
-  }
-
-  const records = getRecords();
-  const existingRecord = records.find((r) => r.sessionId === sessionId && r.userId === userId);
-  if (existingRecord) {
-    return { success: false, message: 'Bạn đã điểm danh cho phiên này rồi' };
-  }
-
-  try {
-    const remoteRecordQuery = query(
-      collection(firebaseDb, RECORDS_COLLECTION),
-      where('sessionId', '==', sessionId),
-      where('userId', '==', userId)
-    );
-    const remoteRecordSnapshot = await getDocs(remoteRecordQuery);
-    if (!remoteRecordSnapshot.empty) {
-      return { success: false, message: 'Bạn đã điểm danh cho phiên này rồi' };
-    }
-  } catch (error) {
-    const errorCode = (error as { code?: string } | null)?.code;
-    if (errorCode === 'permission-denied') {
-      return { success: false, message: 'Firestore rules chưa cho phép truy cập attendance_records' };
-    }
-    return { success: false, message: 'Không thể kiểm tra lịch sử điểm danh' };
-  }
-
-  const sessions = getSessions();
-  if (!sessions.find((s) => s.id === session.id)) {
-    sessions.push(session);
-    setSessionsCache(sessions);
-  }
-
-  const newRecord: AttendanceRecord = {
-    id: `record${Date.now()}`,
-    sessionId,
-    userId,
-    timestamp: now,
-    status: 'valid',
-  };
-
-  records.push(newRecord);
-  localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
-
-  try {
-    await addRecordToFirestore({
-      sessionId: newRecord.sessionId,
-      userId: newRecord.userId,
-      timestamp: newRecord.timestamp,
-      status: newRecord.status,
-    });
-    return { success: true, message: 'Điểm danh thành công', record: newRecord };
-  } catch {
-    const nextRecords = getRecords().filter((r) => r.id !== newRecord.id);
-    localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(nextRecords));
-    return { success: false, message: 'Không thể đồng bộ điểm danh. Vui lòng thử lại.' };
-  }
-};
-
-export const addRecordToFirestore = async (
-  record: Omit<AttendanceRecord, 'id'>
-): Promise<AttendanceRecord> => {
-  const recordRef = await addDoc(collection(firebaseDb, RECORDS_COLLECTION), {
-    sessionId: record.sessionId,
-    userId: record.userId,
-    timestamp: record.timestamp.toISOString(),
-    status: record.status,
-  });
-
-  return {
-    id: recordRef.id,
-    ...record,
-  };
-};
-
-export const subscribeRecordsBySession = (
-  sessionId: string,
-  callback: (records: AttendanceRecord[]) => void
-) => {
-  const recordsQuery = query(
-    collection(firebaseDb, RECORDS_COLLECTION),
-    where('sessionId', '==', sessionId)
-  );
-
-  return onSnapshot(recordsQuery, (snapshot) => {
-    const realtimeRecords: AttendanceRecord[] = snapshot.docs.map((recordDoc) => {
-      const data = recordDoc.data() as {
-        sessionId: string;
-        userId: string;
-        timestamp: string;
-        status: AttendanceRecord['status'];
-      };
-      return {
-        id: recordDoc.id,
-        sessionId: data.sessionId,
-        userId: data.userId,
-        timestamp: new Date(data.timestamp),
-        status: data.status,
-      };
-    });
-
-    callback(realtimeRecords);
-  });
-};
-
-export const getRecordsBySession = (sessionId: string): AttendanceRecord[] => {
-  return getRecords().filter(r => r.sessionId === sessionId);
-};
-
-export const getRecordsByUser = (userId: string): AttendanceRecord[] => {
-  return getRecords().filter(r => r.userId === userId);
-};
-
-// Group functions
 export const getGroups = (): Group[] => {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.GROUPS) || '[]');
-};
-
-const setGroupsCache = (groups: Group[]) => {
-  localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(groups));
-};
-
-const setSessionsCache = (sessions: AttendanceSession[]) => {
-  localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
-};
-
-const toDateValue = (value: unknown): Date => {
-  if (value instanceof Date) {
-    return value;
-  }
-  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  return new Date(String(value));
+  return JSON.parse(localStorage.getItem(STORAGE_KEYS.GROUPS) || '[]') as Group[];
 };
 
 export const getGroupsFromFirebase = async (): Promise<Group[]> => {
@@ -596,6 +256,273 @@ export const getGroupsFromFirebase = async (): Promise<Group[]> => {
   return groups;
 };
 
+export const createGroup = async (group: Omit<Group, 'id'>): Promise<Group> => {
+  const groupRef = await addDoc(collection(firebaseDb, GROUPS_COLLECTION), {
+    name: group.name,
+    description: group.description,
+    memberIds: group.memberIds,
+  });
+
+  const newGroup: Group = { ...group, id: groupRef.id };
+  const groups = getGroups();
+  setGroupsCache([...groups.filter((g) => g.id !== newGroup.id), newGroup]);
+  return newGroup;
+};
+
+export const updateGroup = async (groupId: string, updates: Partial<Group>): Promise<Group | null> => {
+  const groups = await getGroupsFromFirebase();
+  const index = groups.findIndex((g) => g.id === groupId);
+  if (index === -1) return null;
+
+  const next: Group = { ...groups[index], ...updates };
+  groups[index] = next;
+  setGroupsCache(groups);
+
+  await updateDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId), {
+    ...(updates.name !== undefined ? { name: updates.name } : {}),
+    ...(updates.description !== undefined ? { description: updates.description } : {}),
+    ...(updates.memberIds !== undefined ? { memberIds: updates.memberIds } : {}),
+  });
+
+  return next;
+};
+
+export const deleteGroup = async (groupId: string): Promise<boolean> => {
+  const groups = await getGroupsFromFirebase();
+  const remaining = groups.filter((g) => g.id !== groupId);
+  if (remaining.length === groups.length) {
+    return false;
+  }
+
+  await deleteDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId));
+  setGroupsCache(remaining);
+  return true;
+};
+
+export const addMemberToGroup = async (groupId: string, userId: string): Promise<boolean> => {
+  const groups = await getGroupsFromFirebase();
+  const group = groups.find((g) => g.id === groupId);
+  if (!group) return false;
+  if (group.memberIds.includes(userId)) return false;
+
+  const memberIds = [...group.memberIds, userId];
+  await updateDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId), { memberIds });
+  group.memberIds = memberIds;
+  setGroupsCache(groups);
+  return true;
+};
+
+export const removeMemberFromGroup = async (groupId: string, userId: string): Promise<boolean> => {
+  const groups = await getGroupsFromFirebase();
+  const group = groups.find((g) => g.id === groupId);
+  if (!group) return false;
+
+  const memberIds = group.memberIds.filter((id) => id !== userId);
+  if (memberIds.length === group.memberIds.length) return false;
+
+  await updateDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId), { memberIds });
+  group.memberIds = memberIds;
+  setGroupsCache(groups);
+  return true;
+};
+
+export const importStudentsToGroup = async (
+  groupId: string,
+  rows: ImportedStudentRow[]
+): Promise<{ added: number; updated: number; linkedToGroup: number }> => {
+  const groups = await getGroupsFromFirebase();
+  const group = groups.find((g) => g.id === groupId);
+  if (!group) {
+    return { added: 0, updated: 0, linkedToGroup: 0 };
+  }
+
+  const existingAccounts = await getStudentAccountsFromFirebase();
+  const accountMap = new Map(existingAccounts.map((a) => [a.studentId.toLowerCase(), a]));
+
+  let added = 0;
+  let updated = 0;
+  let linkedToGroup = 0;
+
+  for (const row of rows) {
+    const studentId = row.studentId.trim();
+    if (!studentId) continue;
+
+    const userId = `sv_${studentId}`;
+    const payload: StudentAccount = {
+      studentId,
+      fullName: row.fullName.trim(),
+      email: row.email.trim().toLowerCase(),
+      password: row.password,
+      userId,
+    };
+
+    if (accountMap.has(studentId.toLowerCase())) {
+      updated += 1;
+    } else {
+      added += 1;
+    }
+
+    await setDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, studentId), payload);
+    accountMap.set(studentId.toLowerCase(), payload);
+
+    if (!group.memberIds.includes(userId)) {
+      group.memberIds.push(userId);
+      linkedToGroup += 1;
+    }
+  }
+
+  await updateDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId), {
+    memberIds: group.memberIds,
+  });
+
+  setGroupsCache(groups);
+  setStudentAccountsCache(Array.from(accountMap.values()));
+
+  return { added, updated, linkedToGroup };
+};
+
+export const updateGroupMemberProfile = async (
+  userId: string,
+  updates: { studentId: string; fullName: string; email: string }
+): Promise<{ success: boolean; message?: string }> => {
+  const studentId = updates.studentId.trim();
+  const fullName = updates.fullName.trim();
+  const email = updates.email.trim().toLowerCase();
+
+  if (!studentId || !fullName || !email) {
+    return { success: false, message: 'Vui lòng điền đầy đủ thông tin' };
+  }
+
+  const accounts = await getStudentAccountsFromFirebase();
+  const current = accounts.find((a) => a.userId === userId);
+  if (!current) {
+    return { success: false, message: 'Không tìm thấy thành viên' };
+  }
+
+  if (accounts.some((a) => a.userId !== userId && a.studentId === studentId)) {
+    return { success: false, message: 'MSSV đã tồn tại' };
+  }
+
+  if (accounts.some((a) => a.userId !== userId && a.email === email)) {
+    return { success: false, message: 'Email đã tồn tại' };
+  }
+
+  const nextAccount: StudentAccount = {
+    studentId,
+    fullName,
+    email,
+    password: current.password || 'user123',
+    userId,
+  };
+
+  if (current.studentId !== studentId) {
+    await deleteDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, current.studentId));
+  }
+
+  await setDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, studentId), nextAccount);
+
+  const nextAccounts = accounts
+    .filter((a) => a.userId !== userId)
+    .concat(nextAccount);
+  setStudentAccountsCache(nextAccounts);
+
+  return { success: true };
+};
+
+export const createUser = async (user: Omit<User, 'id'>): Promise<User> => {
+  const accounts = await getStudentAccountsFromFirebase();
+  const email = user.email.trim().toLowerCase();
+  if (accounts.some((a) => a.email === email)) {
+    throw new Error('Email đã tồn tại');
+  }
+
+  const studentId = `SV${String(Date.now()).slice(-8)}`;
+  const created: StudentAccount = {
+    studentId,
+    fullName: user.name.trim(),
+    email,
+    password: user.password || 'user123',
+    userId: `sv_${studentId}`,
+  };
+
+  await setDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, studentId), created);
+  setStudentAccountsCache([...accounts, created]);
+
+  return {
+    id: created.userId,
+    name: created.fullName,
+    email: created.email,
+    role: 'user',
+    password: created.password,
+  };
+};
+
+export const updateUser = async (userId: string, updates: Partial<User>): Promise<User | null> => {
+  const accounts = await getStudentAccountsFromFirebase();
+  const current = accounts.find((a) => a.userId === userId);
+  if (!current) return null;
+
+  const nextEmail = (updates.email || current.email).trim().toLowerCase();
+  const nextName = (updates.name || current.fullName).trim();
+
+  if (accounts.some((a) => a.userId !== userId && a.email === nextEmail)) {
+    throw new Error('Email đã tồn tại');
+  }
+
+  const next: StudentAccount = {
+    ...current,
+    fullName: nextName,
+    email: nextEmail,
+    password: updates.password || current.password,
+  };
+
+  await setDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, current.studentId), next);
+  const nextAccounts = accounts.map((a) => (a.userId === userId ? next : a));
+  setStudentAccountsCache(nextAccounts);
+
+  return {
+    id: next.userId,
+    name: next.fullName,
+    email: next.email,
+    role: 'user',
+    password: next.password,
+  };
+};
+
+export const deleteUser = async (userId: string): Promise<boolean> => {
+  const accounts = await getStudentAccountsFromFirebase();
+  const target = accounts.find((a) => a.userId === userId);
+  if (!target) return false;
+
+  await deleteDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, target.studentId));
+
+  const groups = await getGroupsFromFirebase();
+  await Promise.all(
+    groups
+      .filter((group) => group.memberIds.includes(userId))
+      .map((group) => {
+        const memberIds = group.memberIds.filter((id) => id !== userId);
+        group.memberIds = memberIds;
+        return updateDoc(doc(firebaseDb, GROUPS_COLLECTION, group.id), { memberIds });
+      })
+  );
+
+  setGroupsCache(groups);
+  setStudentAccountsCache(accounts.filter((a) => a.userId !== userId));
+  return true;
+};
+
+export const getSessions = (): AttendanceSession[] => {
+  const sessions = JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSIONS) || '[]') as Array<
+    AttendanceSession & { startTime: string; endTime: string }
+  >;
+  return sessions.map((session) => ({
+    ...session,
+    startTime: new Date(session.startTime),
+    endTime: new Date(session.endTime),
+  }));
+};
+
 export const getSessionsFromFirebase = async (): Promise<AttendanceSession[]> => {
   const snapshot = await getDocs(collection(firebaseDb, SESSIONS_COLLECTION));
   const sessions: AttendanceSession[] = snapshot.docs.map((sessionDoc) => {
@@ -611,8 +538,7 @@ export const getSessionsFromFirebase = async (): Promise<AttendanceSession[]> =>
 
     const startTime = toDateValue(data.startTime);
     const endTime = toDateValue(data.endTime);
-    const now = new Date();
-    const computedStatus: AttendanceSession['status'] = now > endTime ? 'expired' : 'active';
+    const status: AttendanceSession['status'] = new Date() > endTime ? 'expired' : 'active';
 
     return {
       id: sessionDoc.id,
@@ -622,7 +548,7 @@ export const getSessionsFromFirebase = async (): Promise<AttendanceSession[]> =>
       endTime,
       groupId: data.groupId || '',
       createdBy: data.createdBy || '',
-      status: data.status || computedStatus,
+      status: data.status || status,
     };
   });
 
@@ -630,206 +556,292 @@ export const getSessionsFromFirebase = async (): Promise<AttendanceSession[]> =>
   return sessions;
 };
 
-export const getUsers = (): User[] => {
-  return JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+export const createSession = async (
+  session: Omit<AttendanceSession, 'id' | 'token'>
+): Promise<AttendanceSession> => {
+  const token = `ATT-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+
+  const ref = await addDoc(collection(firebaseDb, SESSIONS_COLLECTION), {
+    name: session.name,
+    token,
+    startTime: session.startTime.toISOString(),
+    endTime: session.endTime.toISOString(),
+    groupId: session.groupId,
+    createdBy: session.createdBy,
+    status: session.status,
+  });
+
+  const created: AttendanceSession = {
+    ...session,
+    id: ref.id,
+    token,
+  };
+
+  setSessionsCache([...getSessions(), created]);
+  return created;
 };
 
-export const getUserById = (userId: string): User | undefined => {
-  return getUsers().find(u => u.id === userId);
-};
-
-export const importStudentsToGroup = async (
-  groupId: string,
-  rows: ImportedStudentRow[]
-): Promise<{ added: number; updated: number; linkedToGroup: number }> => {
-  const groups = getGroups();
-  const groupIndex = groups.findIndex((g) => g.id === groupId);
-  if (groupIndex === -1) {
-    return { added: 0, updated: 0, linkedToGroup: 0 };
+export const updateSession = async (
+  sessionId: string,
+  updates: Pick<AttendanceSession, 'name' | 'groupId' | 'startTime' | 'endTime'>
+): Promise<boolean> => {
+  const sessions = await getSessionsFromFirebase();
+  const index = sessions.findIndex((s) => s.id === sessionId);
+  if (index === -1) {
+    return false;
   }
 
-  const existingAccounts = await getStudentAccountsFromFirebase();
-  const users = getUsers();
-  const nextAccounts = [...existingAccounts];
-  const nextUsers = [...users];
+  const status: AttendanceSession['status'] = new Date() > updates.endTime ? 'expired' : 'active';
+  sessions[index] = {
+    ...sessions[index],
+    ...updates,
+    status,
+  };
 
-  let added = 0;
-  let updated = 0;
-  let linkedToGroup = 0;
+  await updateDoc(doc(firebaseDb, SESSIONS_COLLECTION, sessionId), {
+    name: updates.name,
+    groupId: updates.groupId,
+    startTime: updates.startTime.toISOString(),
+    endTime: updates.endTime.toISOString(),
+    status,
+  });
 
-  const findAccountIndex = (studentId: string) =>
-    nextAccounts.findIndex((a) => a.studentId.trim().toLowerCase() === studentId.trim().toLowerCase());
+  setSessionsCache(sessions);
+  return true;
+};
 
-  rows.forEach((row) => {
-    const normalizedStudentId = row.studentId.trim();
-    if (!normalizedStudentId) return;
-    const normalizedUserId = `sv_${normalizedStudentId}`;
+export const deleteSession = async (sessionId: string): Promise<boolean> => {
+  const sessions = await getSessionsFromFirebase();
+  const remaining = sessions.filter((s) => s.id !== sessionId);
+  if (remaining.length === sessions.length) {
+    return false;
+  }
 
-    const accountIndex = findAccountIndex(normalizedStudentId);
-    let userId = normalizedUserId;
+  await deleteDoc(doc(firebaseDb, SESSIONS_COLLECTION, sessionId));
 
-    if (accountIndex >= 0) {
-      nextAccounts[accountIndex] = {
-        ...nextAccounts[accountIndex],
-        fullName: row.fullName.trim(),
-        email: row.email.trim().toLowerCase(),
-        password: row.password,
-        userId: normalizedUserId,
-      };
-      updated += 1;
-    } else {
-      nextAccounts.push({
-        studentId: normalizedStudentId,
-        fullName: row.fullName.trim(),
-        email: row.email.trim().toLowerCase(),
-        password: row.password,
-        userId: normalizedUserId,
-      });
-      added += 1;
-    }
+  const recordsQuery = query(collection(firebaseDb, RECORDS_COLLECTION), where('sessionId', '==', sessionId));
+  const recordsSnapshot = await getDocs(recordsQuery);
+  await Promise.all(recordsSnapshot.docs.map((recordDoc) => deleteDoc(recordDoc.ref)));
 
-    const existingUserIndex = nextUsers.findIndex((u) => u.id === userId);
-    const nextUser: User = {
-      id: userId,
-      name: row.fullName.trim(),
-      email: row.email.trim().toLowerCase(),
-      role: 'user',
-      password: row.password,
+  setSessionsCache(remaining);
+  setRecordsCache(getRecords().filter((r) => r.sessionId !== sessionId));
+  return true;
+};
+
+export const getSessionByToken = (token: string): AttendanceSession | null => {
+  const normalized = normalizeToken(token);
+  return getSessions().find((session) => normalizeToken(session.token) === normalized) || null;
+};
+
+export const getSessionByTokenFromFirebase = async (token: string): Promise<AttendanceSession | null> => {
+  await ensureFirebaseAuthSession();
+
+  const exactTokenQuery = query(
+    collection(firebaseDb, SESSIONS_COLLECTION),
+    where('token', '==', token.trim())
+  );
+  const exactSnapshot = await getDocs(exactTokenQuery);
+  if (!exactSnapshot.empty) {
+    const docSnap = exactSnapshot.docs[0];
+    const data = docSnap.data() as {
+      name?: string;
+      token?: string;
+      startTime?: unknown;
+      endTime?: unknown;
+      groupId?: string;
+      createdBy?: string;
+      status?: AttendanceSession['status'];
     };
 
-    if (existingUserIndex >= 0) {
-      nextUsers[existingUserIndex] = { ...nextUsers[existingUserIndex], ...nextUser };
-    } else {
-      nextUsers.push(nextUser);
-    }
+    const startTime = toDateValue(data.startTime);
+    const endTime = toDateValue(data.endTime);
+    const session: AttendanceSession = {
+      id: docSnap.id,
+      name: data.name || '',
+      token: data.token || '',
+      startTime,
+      endTime,
+      groupId: data.groupId || '',
+      createdBy: data.createdBy || '',
+      status: data.status || (new Date() > endTime ? 'expired' : 'active'),
+    };
 
-    if (!groups[groupIndex].memberIds.includes(userId)) {
-      groups[groupIndex].memberIds.push(userId);
-      linkedToGroup += 1;
-    }
-  });
+    const sessions = getSessions().filter((s) => s.id !== session.id).concat(session);
+    setSessionsCache(sessions);
+    return session;
+  }
 
-  setStudentAccounts(nextAccounts);
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(nextUsers));
-  setGroupsCache(groups);
-
-  await Promise.all(
-    rows
-      .map((row) => {
-        const normalizedStudentId = row.studentId.trim();
-        if (!normalizedStudentId) {
-          return null;
-        }
-        const accountPayload: StudentAccount = {
-          studentId: normalizedStudentId,
-          fullName: row.fullName.trim(),
-          email: row.email.trim().toLowerCase(),
-          password: row.password,
-          userId: `sv_${normalizedStudentId}`,
-        };
-        return setDoc(doc(firebaseDb, STUDENT_ACCOUNTS_COLLECTION, normalizedStudentId), accountPayload);
-      })
-      .filter((promise): promise is Promise<void> => Boolean(promise))
-  );
-
-  await updateDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId), {
-    memberIds: groups[groupIndex].memberIds,
-  });
-
-  return { added, updated, linkedToGroup };
+  const normalized = normalizeToken(token);
+  const sessions = await getSessionsFromFirebase();
+  return sessions.find((s) => normalizeToken(s.token) === normalized) || null;
 };
 
-// User management functions
-export const createUser = (user: Omit<User, 'id'>): User => {
-  const users = getUsers();
-  const newUser: User = {
-    ...user,
-    id: `user${Date.now()}`,
+export const getRecords = (): AttendanceRecord[] => {
+  const records = JSON.parse(localStorage.getItem(STORAGE_KEYS.RECORDS) || '[]') as Array<
+    AttendanceRecord & { timestamp: string }
+  >;
+  return records.map((record) => ({
+    ...record,
+    timestamp: new Date(record.timestamp),
+  }));
+};
+
+export const getRecordsFromFirebase = async (): Promise<AttendanceRecord[]> => {
+  const snapshot = await getDocs(collection(firebaseDb, RECORDS_COLLECTION));
+  const records: AttendanceRecord[] = snapshot.docs.map((recordDoc) => {
+    const data = recordDoc.data() as {
+      sessionId: string;
+      userId: string;
+      timestamp: unknown;
+      status: AttendanceRecord['status'];
+    };
+
+    return {
+      id: recordDoc.id,
+      sessionId: data.sessionId,
+      userId: data.userId,
+      timestamp: toDateValue(data.timestamp),
+      status: data.status,
+    };
+  });
+
+  setRecordsCache(records);
+  return records;
+};
+
+export const getRecordsBySessionFromFirebase = async (sessionId: string): Promise<AttendanceRecord[]> => {
+  const recordsQuery = query(collection(firebaseDb, RECORDS_COLLECTION), where('sessionId', '==', sessionId));
+  const snapshot = await getDocs(recordsQuery);
+
+  const records: AttendanceRecord[] = snapshot.docs.map((recordDoc) => {
+    const data = recordDoc.data() as {
+      sessionId: string;
+      userId: string;
+      timestamp: unknown;
+      status: AttendanceRecord['status'];
+    };
+
+    return {
+      id: recordDoc.id,
+      sessionId: data.sessionId,
+      userId: data.userId,
+      timestamp: toDateValue(data.timestamp),
+      status: data.status,
+    };
+  });
+
+  return records.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+};
+
+export const getRecordsBySession = (sessionId: string): AttendanceRecord[] => {
+  return getRecords().filter((record) => record.sessionId === sessionId);
+};
+
+export const getRecordsByUser = (userId: string): AttendanceRecord[] => {
+  return getRecords().filter((record) => record.userId === userId);
+};
+
+export const addRecordToFirestore = async (
+  record: Omit<AttendanceRecord, 'id'>
+): Promise<AttendanceRecord> => {
+  const ref = await addDoc(collection(firebaseDb, RECORDS_COLLECTION), {
+    sessionId: record.sessionId,
+    userId: record.userId,
+    timestamp: record.timestamp.toISOString(),
+    status: record.status,
+  });
+
+  return {
+    id: ref.id,
+    ...record,
   };
-  users.push(newUser);
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  return newUser;
 };
 
-export const updateUser = (userId: string, updates: Partial<User>): User | null => {
-  const users = getUsers();
-  const index = users.findIndex(u => u.id === userId);
-  if (index === -1) return null;
-  
-  users[index] = { ...users[index], ...updates };
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  return users[index];
-};
+export const createRecord = async (
+  sessionId: string,
+  userId: string,
+  sessionOverride?: AttendanceSession
+): Promise<{ success: boolean; message: string; record?: AttendanceRecord }> => {
+  const session =
+    sessionOverride || (await getSessionsFromFirebase()).find((item) => item.id === sessionId) || null;
 
-export const deleteUser = (userId: string): boolean => {
-  const users = getUsers();
-  const filtered = users.filter(u => u.id !== userId);
-  if (filtered.length === users.length) return false;
-  
-  localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(filtered));
-  return true;
-};
+  if (!session) {
+    return { success: false, message: 'Phiên điểm danh không tồn tại' };
+  }
 
-// Group management functions
-export const createGroup = async (group: Omit<Group, 'id'>): Promise<Group> => {
-  const groups = getGroups();
-  const groupRef = await addDoc(collection(firebaseDb, GROUPS_COLLECTION), {
-    name: group.name,
-    description: group.description,
-    memberIds: group.memberIds,
+  const now = new Date();
+  if (now < session.startTime) {
+    return { success: false, message: 'Phiên điểm danh chưa bắt đầu' };
+  }
+
+  if (now > session.endTime) {
+    return { success: false, message: 'Phiên điểm danh đã kết thúc' };
+  }
+
+  try {
+    await ensureFirebaseAuthSession();
+  } catch {
+    return { success: false, message: 'Không thể kết nối dữ liệu điểm danh' };
+  }
+
+  try {
+    const groupSnapshot = await getDoc(doc(firebaseDb, GROUPS_COLLECTION, session.groupId));
+    if (groupSnapshot.exists()) {
+      const groupData = groupSnapshot.data() as { memberIds?: string[] };
+      const memberIds = Array.isArray(groupData.memberIds) ? groupData.memberIds : [];
+      if (!memberIds.includes(userId)) {
+        return { success: false, message: 'Bạn không thuộc nhóm của phiên điểm danh này' };
+      }
+    }
+  } catch {
+    // Keep attendance available even if group check fails.
+  }
+
+  const duplicateQuery = query(
+    collection(firebaseDb, RECORDS_COLLECTION),
+    where('sessionId', '==', sessionId),
+    where('userId', '==', userId)
+  );
+  const duplicateSnapshot = await getDocs(duplicateQuery);
+  if (!duplicateSnapshot.empty) {
+    return { success: false, message: 'Bạn đã điểm danh cho phiên này rồi' };
+  }
+
+  const created = await addRecordToFirestore({
+    sessionId,
+    userId,
+    timestamp: now,
+    status: 'valid',
   });
 
-  const newGroup: Group = { ...group, id: groupRef.id };
-  groups.push(newGroup);
-  setGroupsCache(groups);
-  return newGroup;
+  setRecordsCache(getRecords().concat(created));
+  return { success: true, message: 'Điểm danh thành công', record: created };
 };
 
-export const updateGroup = async (groupId: string, updates: Partial<Group>): Promise<Group | null> => {
-  const groups = getGroups();
-  const index = groups.findIndex(g => g.id === groupId);
-  if (index === -1) return null;
-  
-  groups[index] = { ...groups[index], ...updates };
-  setGroupsCache(groups);
-  await updateDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId), {
-    ...(updates.name !== undefined ? { name: updates.name } : {}),
-    ...(updates.description !== undefined ? { description: updates.description } : {}),
-    ...(updates.memberIds !== undefined ? { memberIds: updates.memberIds } : {}),
+export const subscribeRecordsBySession = (
+  sessionId: string,
+  callback: (records: AttendanceRecord[]) => void
+) => {
+  const recordsQuery = query(collection(firebaseDb, RECORDS_COLLECTION), where('sessionId', '==', sessionId));
+
+  return onSnapshot(recordsQuery, (snapshot) => {
+    const records: AttendanceRecord[] = snapshot.docs.map((recordDoc) => {
+      const data = recordDoc.data() as {
+        sessionId: string;
+        userId: string;
+        timestamp: unknown;
+        status: AttendanceRecord['status'];
+      };
+
+      return {
+        id: recordDoc.id,
+        sessionId: data.sessionId,
+        userId: data.userId,
+        timestamp: toDateValue(data.timestamp),
+        status: data.status,
+      };
+    });
+
+    callback(records);
   });
-  return groups[index];
 };
-
-export const deleteGroup = async (groupId: string): Promise<boolean> => {
-  const groups = getGroups();
-  const filtered = groups.filter(g => g.id !== groupId);
-  if (filtered.length === groups.length) return false;
-  
-  setGroupsCache(filtered);
-  await deleteDoc(doc(firebaseDb, GROUPS_COLLECTION, groupId));
-  return true;
-};
-
-export const addMemberToGroup = async (groupId: string, userId: string): Promise<boolean> => {
-  const group = getGroups().find(g => g.id === groupId);
-  if (!group) return false;
-  
-  if (group.memberIds.includes(userId)) return false;
-  
-  group.memberIds.push(userId);
-  await updateGroup(groupId, { memberIds: group.memberIds });
-  return true;
-};
-
-export const removeMemberFromGroup = async (groupId: string, userId: string): Promise<boolean> => {
-  const group = getGroups().find(g => g.id === groupId);
-  if (!group) return false;
-  
-  const filtered = group.memberIds.filter(id => id !== userId);
-  if (filtered.length === group.memberIds.length) return false;
-  
-  await updateGroup(groupId, { memberIds: filtered });
-  return true;
-};
-
-

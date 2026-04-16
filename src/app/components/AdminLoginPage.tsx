@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { UserCircle, Lock } from 'lucide-react';
-import { getCurrentUser, initializeMockData, loginAdminWithFirebase } from '../utils/mockData';
+import { getCurrentUser, loginAdminWithFirebase } from '../utils/mockData';
 import { toast } from 'sonner';
 import coverLogin from '../../assets/coverlogin.jpg';
 
@@ -16,8 +16,6 @@ export function AdminLoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    initializeMockData();
-
     const currentUser = getCurrentUser();
     if (currentUser) {
       navigate(currentUser.role === 'admin' ? '/admin' : '/user');

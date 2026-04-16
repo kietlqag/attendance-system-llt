@@ -81,13 +81,8 @@ export function GroupManagement() {
                       <Users className="w-6 h-6 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-lg">{group.name}</h3>
-                        <Badge variant="secondary">{group.memberIds.length} thành viên</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {group.description || 'Không có mô tả'}
-                      </p>
+                      <h3 className="font-semibold text-lg mb-2">{group.name}</h3>
+                      <Badge variant="secondary">{group.memberIds.length} thành viên</Badge>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

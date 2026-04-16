@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { getSessionsFromFirebase, getGroupsFromFirebase, getStudentAccountsFromFirebase } from '../../utils/mockData';
-import { Calendar, Users, QrCode, Clock, ChevronRight } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { getGroupsFromFirebase, getSessionsFromFirebase, getStudentAccountsFromFirebase } from '../../utils/mockData';
+import { Calendar, ChevronRight, Clock, QrCode, Users } from 'lucide-react';
 import type { AttendanceSession, Group, StudentAccount } from '../../utils/mockData';
 
 export function AdminDashboard() {
@@ -34,8 +34,9 @@ export function AdminDashboard() {
     void loadData();
   }, []);
 
-  const activeSessions = sessions.filter((s) => new Date() <= s.endTime).length;
+  const activeSessions = sessions.filter((s) => new Date() <= new Date(s.endTime)).length;
   const totalMembers = studentAccounts.length;
+  const formatDateTime = (value: Date | string) => new Date(value).toLocaleString('vi-VN');
 
   return (
     <div className="space-y-8">
@@ -47,7 +48,6 @@ export function AdminDashboard() {
                 <Calendar className="w-5 h-5 text-primary" />
                 Quản lý phiên điểm danh
               </CardTitle>
-              <CardDescription>Xem và quản lý tất cả các phiên điểm danh</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary mb-2">{sessions.length}</div>
@@ -63,7 +63,6 @@ export function AdminDashboard() {
                 <Users className="w-5 h-5 text-accent" />
                 Quản lý lớp
               </CardTitle>
-              <CardDescription>Quản lý lớp và thành viên</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-accent mb-2">{groups.length}</div>
@@ -125,9 +124,15 @@ export function AdminDashboard() {
                             </div>
                             <p className="text-sm text-muted-foreground mb-3">{group?.name || 'Không có nhóm'}</p>
                             <div className="flex flex-wrap gap-4 text-sm">
-                              <div className="flex items-center gap-1.5 text-muted-foreground">
-                                <Clock className="w-4 h-4" />
-                                {new Date(session.endTime).toLocaleString('vi-VN')}
+                              <div className="text-muted-foreground space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4" />
+                                  <span>Bắt đầu: {formatDateTime(session.startTime)}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4" />
+                                  <span>Kết thúc: {formatDateTime(session.endTime)}</span>
+                                </div>
                               </div>
                               <div className="flex items-center gap-1.5 text-muted-foreground">
                                 <QrCode className="w-4 h-4" />

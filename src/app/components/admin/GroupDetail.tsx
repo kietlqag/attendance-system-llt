@@ -1,22 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Badge } from '../ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { 
-  getGroupsFromFirebase, 
-  getUsers, 
-  addMemberToGroup, 
-  removeMemberFromGroup,
-  createUser,
-  getUserById,
-} from '../../utils/mockData';
-import { ArrowLeft, UserPlus, Trash2, Users, Mail } from 'lucide-react';
+﻿import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
+import { ArrowLeft, Mail, Pencil, Trash2, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Group, User } from '../../utils/mockData';
+
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,22 +26,41 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../ui/alert-dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import {
+  getGroupsFromFirebase,
+  getStudentAccountsFromFirebase,
+  getUsers,
+  importStudentsToGroup,
+  removeMemberFromGroup,
+  updateGroupMemberProfile,
+} from '../../utils/mockData';
+import type { Group, StudentAccount, User } from '../../utils/mockData';
 
 export function GroupDetail() {
   const { groupId } = useParams();
   const navigate = useNavigate();
+
   const [group, setGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<User[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [studentAccounts, setStudentAccounts] = useState<StudentAccount[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [userToRemove, setUserToRemove] = useState<string | null>(null);
-  
+
   const [newUserForm, setNewUserForm] = useState({
+    studentId: '',
     name: '',
     email: '',
     password: 'user123',
+  });
+
+  const [editUserForm, setEditUserForm] = useState({
+    studentId: '',
+    name: '',
+    email: '',
   });
 
   useEffect(() => {
@@ -60,37 +70,70 @@ export function GroupDetail() {
   const loadGroup = async () => {
     if (!groupId) return;
 
-    const groups = await getGroupsFromFirebase();
-    const foundGroup = groups.find(g => g.id === groupId);
-    if (foundGroup) {
-      setGroup(foundGroup);
-      
-      // Load members
-      const allUsers = getUsers();
-      const groupMembers = allUsers.filter(u => 
-        u.role === 'user' && foundGroup.memberIds.includes(u.id)
-      );
-      setMembers(groupMembers);
+    const [groups, accounts] = await Promise.all([
+      getGroupsFromFirebase(),
+      getStudentAccountsFromFirebase(),
+    ]);
 
-      // Load available users (not in group)
-      const available = allUsers.filter(u => 
-        u.role === 'user' && !foundGroup.memberIds.includes(u.id)
-      );
-      setAvailableUsers(available);
-    }
+    setStudentAccounts(accounts);
+
+    const foundGroup = groups.find((g) => g.id === groupId);
+    if (!foundGroup) return;
+
+    setGroup(foundGroup);
+
+    const allUsers = getUsers();
+    const groupMembers = allUsers.filter((u) => u.role === 'user' && foundGroup.memberIds.includes(u.id));
+
+    setMembers(groupMembers);
   };
 
-  const handleAddMember = async (userId: string) => {
-    if (!groupId) return;
+  const resolveStudentId = (member: User) => {
+    const account = studentAccounts.find(
+      (item) => item.userId === member.id || item.email === member.email
+    );
 
-    const success = await addMemberToGroup(groupId, userId);
-    if (success) {
-      toast.success('Đã thêm thành viên');
-      await loadGroup();
-      setAddDialogOpen(false);
-    } else {
-      toast.error('Không thể thêm thành viên');
+    if (account?.studentId) {
+      return account.studentId;
     }
+
+    if (member.id.startsWith('sv_')) {
+      return member.id.replace(/^sv_/, '');
+    }
+
+    return 'N/A';
+  };
+
+  const handleEditClick = (member: User) => {
+    setEditingMemberId(member.id);
+    setEditUserForm({
+      studentId: resolveStudentId(member),
+      name: member.name,
+      email: member.email,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingMemberId) return;
+
+    const result = await updateGroupMemberProfile(editingMemberId, {
+      studentId: editUserForm.studentId,
+      fullName: editUserForm.name,
+      email: editUserForm.email,
+    });
+
+    if (!result.success) {
+      toast.error(result.message || 'Không thể cập nhật thành viên');
+      return;
+    }
+
+    toast.success('Đã cập nhật thông tin thành viên');
+    setEditDialogOpen(false);
+    setEditingMemberId(null);
+    await loadGroup();
   };
 
   const handleRemoveClick = (userId: string) => {
@@ -108,6 +151,7 @@ export function GroupDetail() {
     } else {
       toast.error('Không thể xóa thành viên');
     }
+
     setRemoveDialogOpen(false);
     setUserToRemove(null);
   };
@@ -115,32 +159,34 @@ export function GroupDetail() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newUserForm.name.trim() || !newUserForm.email.trim()) {
+    if (!groupId) return;
+
+    if (!newUserForm.studentId.trim() || !newUserForm.name.trim() || !newUserForm.email.trim()) {
       toast.error('Vui lòng điền đầy đủ thông tin');
       return;
     }
 
-    // Check if email exists
-    const existingUsers = getUsers();
-    if (existingUsers.some(u => u.email === newUserForm.email)) {
+    if (studentAccounts.some((a) => a.studentId.trim() === newUserForm.studentId.trim())) {
+      toast.error('MSSV đã tồn tại');
+      return;
+    }
+
+    if (studentAccounts.some((a) => a.email === newUserForm.email.trim().toLowerCase())) {
       toast.error('Email đã tồn tại');
       return;
     }
 
-    const newUser = createUser({
-      name: newUserForm.name.trim(),
-      email: newUserForm.email.trim(),
-      password: newUserForm.password || 'user123',
-      role: 'user',
-    });
+    await importStudentsToGroup(groupId, [
+      {
+        studentId: newUserForm.studentId.trim(),
+        fullName: newUserForm.name.trim(),
+        email: newUserForm.email.trim().toLowerCase(),
+        password: newUserForm.password || 'user123',
+      },
+    ]);
 
-    // Add to group if we have a groupId
-    if (groupId) {
-      await addMemberToGroup(groupId, newUser.id);
-    }
-
-    toast.success(`Đã tạo tài khoản cho ${newUser.name}`);
-    setNewUserForm({ name: '', email: '', password: 'user123' });
+    toast.success(`Đã tạo tài khoản cho ${newUserForm.name.trim()}`);
+    setNewUserForm({ studentId: '', name: '', email: '', password: 'user123' });
     setCreateDialogOpen(false);
     await loadGroup();
   };
@@ -155,7 +201,6 @@ export function GroupDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={() => navigate('/admin/groups')} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
@@ -166,40 +211,15 @@ export function GroupDetail() {
             <UserPlus className="w-4 h-4" />
             Tạo tài khoản mới
           </Button>
-          <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
-            <UserPlus className="w-4 h-4" />
-            Thêm thành viên
-          </Button>
         </div>
       </div>
 
-      {/* Group Info */}
-      <Card className="border-2 border-primary/20">
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <CardTitle className="text-2xl">{group.name}</CardTitle>
-                <Badge variant="secondary">{members.length} thành viên</Badge>
-              </div>
-              <CardDescription className="text-base">
-                {group.description || 'Không có mô tả'}
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* Members List */}
       <Card className="border-2">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Danh sách thành viên ({members.length})
+            {group.name} ({members.length} thành viên)
           </CardTitle>
-          <CardDescription>
-            Quản lý thành viên trong lớp/nhóm
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {members.length === 0 ? (
@@ -211,10 +231,6 @@ export function GroupDetail() {
                   <UserPlus className="w-4 h-4 mr-2" />
                   Tạo tài khoản mới
                 </Button>
-                <Button onClick={() => setAddDialogOpen(true)}>
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Thêm thành viên
-                </Button>
               </div>
             </div>
           ) : (
@@ -223,26 +239,33 @@ export function GroupDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-16">STT</TableHead>
+                    <TableHead>MSSV</TableHead>
                     <TableHead>Họ tên</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead className="text-right w-24">Thao tác</TableHead>
+                    <TableHead className="text-right w-32">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {members.map((member, index) => (
                     <TableRow key={member.id}>
                       <TableCell className="font-medium">{index + 1}</TableCell>
+                      <TableCell className="font-medium">{resolveStudentId(member)}</TableCell>
                       <TableCell className="font-medium">{member.name}</TableCell>
                       <TableCell className="text-muted-foreground">{member.email}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveClick(member.id)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="inline-flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditClick(member)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveClick(member.id)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -253,61 +276,28 @@ export function GroupDetail() {
         </CardContent>
       </Card>
 
-      {/* Add Member Dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Thêm thành viên vào lớp/nhóm</DialogTitle>
-            <DialogDescription>
-              Chọn người dùng từ danh sách để thêm vào lớp/nhóm
-            </DialogDescription>
-          </DialogHeader>
-          
-          {availableUsers.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              <p>Không có người dùng nào khả dụng</p>
-              <Button
-                onClick={() => {
-                  setAddDialogOpen(false);
-                  setCreateDialogOpen(true);
-                }}
-                className="mt-4"
-              >
-                Tạo tài khoản mới
-              </Button>
-            </div>
-          ) : (
-            <div className="max-h-[400px] overflow-y-auto space-y-2">
-              {availableUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
-                >
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                  </div>
-                  <Button onClick={() => handleAddMember(user.id)} size="sm">
-                    Thêm
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Create User Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>T?o t?i kho?n sinh vi?n m?i</DialogTitle>
+            <DialogTitle>Tạo tài khoản sinh viên mới</DialogTitle>
             <DialogDescription>
               Tài khoản mới sẽ được tự động thêm vào lớp/nhóm này
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newUserStudentId">MSSV</Label>
+              <Input
+                id="newUserStudentId"
+                placeholder="VD: 25145318"
+                value={newUserForm.studentId}
+                onChange={(e) => setNewUserForm({ ...newUserForm, studentId: e.target.value })}
+                className="bg-input-background"
+                required
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="newUserName">Họ và tên</Label>
               <Input
@@ -345,35 +335,88 @@ export function GroupDetail() {
                 onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
                 className="bg-input-background"
               />
-              <p className="text-xs text-muted-foreground">
-                Người dùng có thể đổi mật khẩu sau khi đăng nhập
-              </p>
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit">
-                Tạo tài khoản
-              </Button>
+              <Button type="submit">Tạo tài khoản</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Remove Confirmation Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa thành viên</DialogTitle>
+            <DialogDescription>Cập nhật MSSV, họ tên và email của thành viên</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleEditMember} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editUserStudentId">MSSV</Label>
+              <Input
+                id="editUserStudentId"
+                placeholder="VD: 25145318"
+                value={editUserForm.studentId}
+                onChange={(e) => setEditUserForm({ ...editUserForm, studentId: e.target.value })}
+                className="bg-input-background"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editUserName">Họ và tên</Label>
+              <Input
+                id="editUserName"
+                placeholder="VD: Nguyễn Văn A"
+                value={editUserForm.name}
+                onChange={(e) => setEditUserForm({ ...editUserForm, name: e.target.value })}
+                className="bg-input-background"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editUserEmail" className="flex items-center gap-2">
+                <Mail className="w-4 h-4" />
+                Email
+              </Label>
+              <Input
+                id="editUserEmail"
+                type="email"
+                placeholder="VD: nguyenvana@example.com"
+                value={editUserForm.email}
+                onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                className="bg-input-background"
+                required
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit">Lưu thay đổi</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
-            <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa thành viên này khỏi lớp/nhóm?
-            </AlertDialogDescription>
+            <AlertDialogDescription>Bạn có chắc chắn muốn xóa thành viên này khỏi lớp/nhóm?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemoveConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleRemoveConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Xóa
             </AlertDialogAction>
           </AlertDialogFooter>

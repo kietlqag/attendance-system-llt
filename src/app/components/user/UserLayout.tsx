@@ -1,20 +1,35 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router';
-import { getCurrentUser, getStudentAccounts, logout } from '../../utils/mockData';
+import { getCurrentUser, getStudentAccountsFromFirebase, logout, type StudentAccount } from '../../utils/mockData';
 import { Button } from '../ui/button';
-import { LogOut, Home, QrCode, History, Menu, X, CheckCircle2 } from 'lucide-react';
+import { LogOut, Home, QrCode, History, Menu, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function UserLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentStudent, setCurrentStudent] = useState<StudentAccount | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
     if (!user || user.role !== 'user') {
       navigate('/login');
+      return;
     }
+
+    void getStudentAccountsFromFirebase()
+      .then((accounts) => {
+        const matched =
+          accounts.find(
+            (account) =>
+              account.userId === user.id ||
+              account.email === user.email ||
+              account.fullName === user.name
+          ) || null;
+        setCurrentStudent(matched);
+      })
+      .catch(() => setCurrentStudent(null));
   }, [navigate]);
 
   const handleLogout = () => {
@@ -24,15 +39,8 @@ export function UserLayout() {
   };
 
   const currentUser = getCurrentUser();
-  const currentStudent = currentUser
-    ? getStudentAccounts().find(
-        (account) =>
-          account.userId === currentUser.id ||
-          account.email === currentUser.email ||
-          account.fullName === currentUser.name
-      )
-    : undefined;
-  const currentStudentId = currentStudent?.studentId || (currentUser?.id?.startsWith('sv_') ? currentUser.id.replace(/^sv_/, '') : '');
+  const currentStudentId =
+    currentStudent?.studentId || (currentUser?.id?.startsWith('sv_') ? currentUser.id.replace(/^sv_/, '') : '');
 
   const menuItems = [
     {
@@ -107,12 +115,7 @@ export function UserLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-white border-b shadow-sm">
           <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="mr-4"
-            >
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="mr-4">
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
             <h2 className="font-semibold text-lg text-gray-900">

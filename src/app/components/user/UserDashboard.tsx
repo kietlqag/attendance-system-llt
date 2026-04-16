@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { getCurrentUser, getRecordsByUser, getSessions } from '../../utils/mockData';
+import { getCurrentUser, getRecordsFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
 import { QrCode, CheckCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -12,32 +12,40 @@ export function UserDashboard() {
   const [attendanceCount, setAttendanceCount] = useState({ today: 0, thisMonth: 0, total: 0 });
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) return;
+    const load = async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return;
 
-    const records = getRecordsByUser(currentUser.id);
-    const sessions = getSessions();
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const [allRecords, sessions] = await Promise.all([
+        getRecordsFromFirebase(),
+        getSessionsFromFirebase(),
+      ]);
+      const records = allRecords.filter((record) => record.userId === currentUser.id);
 
-    const todayCount = records.filter((r) => r.timestamp >= todayStart).length;
-    const monthCount = records.filter((r) => r.timestamp >= monthStart).length;
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const recent = records
-      .slice()
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, 5)
-      .map((record) => {
-        const session = sessions.find((s) => s.id === record.sessionId);
-        return {
-          ...record,
-          sessionName: session?.name || 'Không xác định',
-        };
-      });
+      const todayCount = records.filter((r) => r.timestamp >= todayStart).length;
+      const monthCount = records.filter((r) => r.timestamp >= monthStart).length;
 
-    setAttendanceCount({ today: todayCount, thisMonth: monthCount, total: records.length });
-    setRecentAttendance(recent);
+      const recent = records
+        .slice()
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 5)
+        .map((record) => {
+          const session = sessions.find((s) => s.id === record.sessionId);
+          return {
+            ...record,
+            sessionName: session?.name || 'Không xác định',
+          };
+        });
+
+      setAttendanceCount({ today: todayCount, thisMonth: monthCount, total: records.length });
+      setRecentAttendance(recent);
+    };
+
+    void load();
   }, []);
 
   return (
@@ -52,8 +60,9 @@ export function UserDashboard() {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg mb-1">Quét mã điểm danh</h3>
-                  <p className="text-sm text-muted-foreground">Quét QR code hoặc nhập mã thủ công</p>
-                  <p className="text-xs text-muted-foreground mt-2">Hôm nay: {attendanceCount.today} | Tháng này: {attendanceCount.thisMonth} | Tổng: {attendanceCount.total}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Hôm nay: {attendanceCount.today} | Tháng này: {attendanceCount.thisMonth} | Tổng: {attendanceCount.total}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -69,7 +78,6 @@ export function UserDashboard() {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg mb-1">Xem lịch sử</h3>
-                  <p className="text-sm text-muted-foreground">Kiểm tra lịch sử điểm danh của bạn</p>
                   <p className="text-xs text-muted-foreground mt-2">Bạn đã điểm danh {attendanceCount.total} lần</p>
                 </div>
               </div>

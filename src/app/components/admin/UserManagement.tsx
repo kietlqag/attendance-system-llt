@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+﻿import { useEffect, useRef, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -12,15 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
-import { getUsers, createUser, deleteUser, updateUser } from '../../utils/mockData';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { createUser, deleteUser, getUsersFromFirebase, updateUser } from '../../utils/mockData';
 import { Upload, UserPlus, Trash2, Edit, Search, Download, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -41,16 +34,16 @@ export function UserManagement() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    loadUsers();
+    void loadUsers();
   }, []);
 
   useEffect(() => {
     filterUsers();
   }, [searchQuery, users]);
 
-  const loadUsers = () => {
-    const allUsers = getUsers();
-    const studentUsers = allUsers.filter(u => u.role === 'user');
+  const loadUsers = async () => {
+    const allUsers = await getUsersFromFirebase();
+    const studentUsers = allUsers.filter((u) => u.role === 'user');
     setUsers(studentUsers);
   };
 
@@ -62,37 +55,34 @@ export function UserManagement() {
 
     const query = searchQuery.toLowerCase();
     const filtered = users.filter(
-      user =>
-        user.name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query)
+      (user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
     );
     setFilteredUsers(filtered);
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.name || !newUser.email) {
       toast.error('Vui lòng điền đầy đủ thông tin');
       return;
     }
 
-    const existingUsers = getUsers();
-    if (existingUsers.find(u => u.email === newUser.email)) {
-      toast.error('Email đã tồn tại');
-      return;
+    try {
+      await createUser({
+        ...newUser,
+        role: 'user',
+      });
+
+      toast.success('Đã thêm sinh viên');
+      setShowAddDialog(false);
+      setNewUser({ name: '', email: '', password: 'user123' });
+      await loadUsers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không thể thêm sinh viên';
+      toast.error(message);
     }
-
-    createUser({
-      ...newUser,
-      role: 'user',
-    });
-
-    toast.success('Đã thêm sinh viên');
-    setShowAddDialog(false);
-    setNewUser({ name: '', email: '', password: 'user123' });
-    loadUsers();
   };
 
-  const handleEditUser = () => {
+  const handleEditUser = async () => {
     if (!editingUser) return;
 
     if (!editingUser.name || !editingUser.email) {
@@ -100,22 +90,31 @@ export function UserManagement() {
       return;
     }
 
-    updateUser(editingUser.id, {
-      name: editingUser.name,
-      email: editingUser.email,
-    });
+    try {
+      await updateUser(editingUser.id, {
+        name: editingUser.name,
+        email: editingUser.email,
+      });
 
-    toast.success('Đã cập nhật thông tin sinh viên');
-    setShowEditDialog(false);
-    setEditingUser(null);
-    loadUsers();
+      toast.success('Đã cập nhật thông tin sinh viên');
+      setShowEditDialog(false);
+      setEditingUser(null);
+      await loadUsers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Không thể cập nhật sinh viên';
+      toast.error(message);
+    }
   };
 
-  const handleDeleteUser = (userId: string, userName: string) => {
+  const handleDeleteUser = async (userId: string, userName: string) => {
     if (confirm(`Bạn có chắc muốn xóa sinh viên ${userName}?`)) {
-      deleteUser(userId);
-      toast.success('Đã xóa sinh viên');
-      loadUsers();
+      const success = await deleteUser(userId);
+      if (success) {
+        toast.success('Đã xóa sinh viên');
+        await loadUsers();
+      } else {
+        toast.error('Không thể xóa sinh viên');
+      }
     }
   };
 
@@ -126,37 +125,45 @@ export function UserManagement() {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
-        const importedUsers = results.data as any[];
+      complete: async (results) => {
+        const importedUsers = results.data as Array<Record<string, string>>;
         let successCount = 0;
         let errorCount = 0;
 
-        const existingUsers = getUsers();
+        const existingUsers = await getUsersFromFirebase();
+        const usedEmails = new Set(existingUsers.map((u) => u.email.toLowerCase()));
 
-        importedUsers.forEach((row) => {
+        for (const row of importedUsers) {
           const name = row.name || row['Họ và tên'] || row['Name'];
-          const email = row.email || row['Email'];
+          const email = (row.email || row['Email'] || '').toLowerCase();
 
-          if (name && email) {
-            if (!existingUsers.find(u => u.email === email)) {
-              createUser({
-                name,
-                email,
-                password: 'user123',
-                role: 'user',
-              });
-              successCount++;
-            } else {
-              errorCount++;
-            }
-          } else {
-            errorCount++;
+          if (!name || !email) {
+            errorCount += 1;
+            continue;
           }
-        });
+
+          if (usedEmails.has(email)) {
+            errorCount += 1;
+            continue;
+          }
+
+          try {
+            await createUser({
+              name,
+              email,
+              password: 'user123',
+              role: 'user',
+            });
+            usedEmails.add(email);
+            successCount += 1;
+          } catch {
+            errorCount += 1;
+          }
+        }
 
         if (successCount > 0) {
           toast.success(`Đã import ${successCount} sinh viên thành công`);
-          loadUsers();
+          await loadUsers();
         }
         if (errorCount > 0) {
           toast.warning(`${errorCount} dòng bị lỗi hoặc trùng lặp`);
@@ -167,14 +174,13 @@ export function UserManagement() {
       },
     });
 
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
   const handleDownloadTemplate = () => {
-    const csv = 'name,email\nNguyễn Văn A,nguyenvana@example.com\nTrần Thị B,tranthib@example.com';
+    const csv = 'name,email\nNguyen Van A,nguyenvana@example.com\nTran Thi B,tranthib@example.com';
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -186,9 +192,9 @@ export function UserManagement() {
 
   const handleExportUsers = () => {
     const csv = Papa.unparse(
-      users.map(u => ({
+      users.map((u) => ({
         'Họ và tên': u.name,
-        'Email': u.email,
+        Email: u.email,
       }))
     );
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -206,13 +212,10 @@ export function UserManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Quản lý sinh viên</h1>
-          <p className="text-muted-foreground">
-            Quản lý danh sách sinh viên và import từ file CSV
-          </p>
+          <p className="text-muted-foreground">Quản lý danh sách sinh viên và import từ file CSV</p>
         </div>
       </div>
 
-      {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="border-2 border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -223,9 +226,7 @@ export function UserManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-primary">{users.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              sinh viên trong hệ thống
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">sinh viên trong hệ thống</p>
           </CardContent>
         </Card>
 
@@ -238,20 +239,14 @@ export function UserManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600">{filteredUsers.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              sinh viên được hiển thị
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">sinh viên được hiển thị</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Actions */}
       <Card>
         <CardHeader>
           <CardTitle>Thao tác nhanh</CardTitle>
-          <CardDescription>
-            Thêm sinh viên mới hoặc import từ file CSV
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -260,20 +255,12 @@ export function UserManagement() {
               Thêm sinh viên
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
               <Upload className="w-4 h-4" />
               Import CSV
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={handleDownloadTemplate}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={handleDownloadTemplate} className="gap-2">
               <Download className="w-4 h-4" />
               Tải file mẫu
             </Button>
@@ -299,7 +286,6 @@ export function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Search */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2">
@@ -314,13 +300,9 @@ export function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Users Table */}
       <Card>
         <CardHeader>
           <CardTitle>Danh sách sinh viên</CardTitle>
-          <CardDescription>
-            {filteredUsers.length} sinh viên
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {filteredUsers.length === 0 ? (
@@ -368,7 +350,7 @@ export function UserManagement() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDeleteUser(user.id, user.name)}
+                            onClick={() => void handleDeleteUser(user.id, user.name)}
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
@@ -383,14 +365,11 @@ export function UserManagement() {
         </CardContent>
       </Card>
 
-      {/* Add User Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Thêm sinh viên mới</DialogTitle>
-            <DialogDescription>
-              Nhập thông tin sinh viên để thêm vào hệ thống
-            </DialogDescription>
+            <DialogDescription>Nhập thông tin sinh viên để thêm vào hệ thống</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -420,28 +399,23 @@ export function UserManagement() {
                 onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                 disabled
               />
-              <p className="text-xs text-muted-foreground">
-                Mật khẩu mặc định: user123
-              </p>
+              <p className="text-xs text-muted-foreground">Mật khẩu mặc định: user123</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>
               Hủy
             </Button>
-            <Button onClick={handleAddUser}>Thêm sinh viên</Button>
+            <Button onClick={() => void handleAddUser()}>Thêm sinh viên</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit User Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Chỉnh sửa thông tin sinh viên</DialogTitle>
-            <DialogDescription>
-              Cập nhật thông tin sinh viên
-            </DialogDescription>
+            <DialogDescription>Cập nhật thông tin sinh viên</DialogDescription>
           </DialogHeader>
           {editingUser && (
             <div className="space-y-4">
@@ -450,9 +424,7 @@ export function UserManagement() {
                 <Input
                   id="edit-name"
                   value={editingUser.name}
-                  onChange={(e) =>
-                    setEditingUser({ ...editingUser, name: e.target.value })
-                  }
+                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
                   placeholder="Nguyễn Văn A"
                 />
               </div>
@@ -462,9 +434,7 @@ export function UserManagement() {
                   id="edit-email"
                   type="email"
                   value={editingUser.email}
-                  onChange={(e) =>
-                    setEditingUser({ ...editingUser, email: e.target.value })
-                  }
+                  onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                   placeholder="nguyenvana@example.com"
                 />
               </div>
@@ -474,7 +444,7 @@ export function UserManagement() {
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Hủy
             </Button>
-            <Button onClick={handleEditUser}>Lưu thay đổi</Button>
+            <Button onClick={() => void handleEditUser()}>Lưu thay đổi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

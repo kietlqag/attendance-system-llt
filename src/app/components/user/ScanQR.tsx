@@ -12,6 +12,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 export function ScanQR() {
   const [manualToken, setManualToken] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const [html5QrCode, setHtml5QrCode] = useState<Html5Qrcode | null>(null);
 
@@ -24,32 +25,55 @@ export function ScanQR() {
   }, [html5QrCode]);
 
   const handleAttendance = async (token: string) => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      toast.error('Vui lòng đăng nhập lại');
-      return;
-    }
+    setSubmitting(true);
 
-    const session = await getSessionByTokenFromFirebase(token);
-    if (!session) {
+    try {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        toast.error('Vui lòng đăng nhập lại');
+        return;
+      }
+
+      let session = null;
+      try {
+        session = await getSessionByTokenFromFirebase(token);
+      } catch (error) {
+        const errorCode = (error as { code?: string } | null)?.code;
+        const message =
+          errorCode === 'auth/admin-restricted-operation'
+            ? 'Firebase chưa bật Anonymous Auth cho sinh viên.'
+            : errorCode === 'permission-denied'
+            ? 'Firestore rules chưa cho phép sinh viên truy cập phiên điểm danh.'
+            : 'Không thể truy cập dữ liệu điểm danh. Vui lòng thử lại.';
+        setResult({ success: false, message });
+        toast.error(message);
+        return;
+      }
+
+      if (!session) {
+        const message = 'Mã điểm danh không hợp lệ';
+        setResult({ success: false, message });
+        toast.error(message);
+        return;
+      }
+
+      const attendanceResult = await createRecord(session.id, currentUser.id, session);
       setResult({
-        success: false,
-        message: 'Mã điểm danh không hợp lệ',
+        success: attendanceResult.success,
+        message: attendanceResult.message,
       });
-      toast.error('Mã điểm danh không hợp lệ');
-      return;
-    }
 
-    const attendanceResult = createRecord(session.id, currentUser.id);
-    setResult({
-      success: attendanceResult.success,
-      message: attendanceResult.message,
-    });
-
-    if (attendanceResult.success) {
-      toast.success(attendanceResult.message);
-    } else {
-      toast.error(attendanceResult.message);
+      if (attendanceResult.success) {
+        toast.success(attendanceResult.message);
+      } else {
+        toast.error(attendanceResult.message);
+      }
+    } catch {
+      const message = 'Yêu cầu điểm danh thất bại. Vui lòng thử lại.';
+      setResult({ success: false, message });
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -164,14 +188,6 @@ export function ScanQR() {
                       Bật camera
                     </Button>
                   </div>
-                  <div className="bg-primary/5 p-4 rounded-lg">
-                    <p className="text-sm font-semibold mb-2">Lưu ý:</p>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>- Cho phép trình duyệt truy cập camera</li>
-                      <li>- Đưa QR code vào khung hình</li>
-                      <li>- Giữ camera ổn định để quét</li>
-                    </ul>
-                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -211,8 +227,8 @@ export function ScanQR() {
                   </p>
                 </div>
 
-                <Button type="submit" className="w-full" size="lg">
-                  Điểm danh
+                <Button type="submit" className="w-full" size="lg" disabled={submitting}>
+                  {submitting ? 'Đang xử lý...' : 'Điểm danh'}
                 </Button>
               </form>
             </CardContent>

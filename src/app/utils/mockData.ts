@@ -1,6 +1,6 @@
-﻿import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { firebaseDb } from '../../lib/firebase';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInAnonymously, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { firebaseAuth } from '../../lib/firebase';
 
 // Mock data vÃ  state quáº£n lÃ½ cho há»‡ thá»‘ng Ä‘iá»ƒm danh
@@ -330,7 +330,20 @@ export const createSession = async (
   return newSession;
 };
 
-const normalizeToken = (token: string) => token.trim().toLowerCase();
+const normalizeToken = (token: string) =>
+  token
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+    .trim()
+    .toLowerCase();
+
+const ensureFirebaseAuthSession = async () => {
+  if (firebaseAuth.currentUser) {
+    return;
+  }
+
+  await signInAnonymously(firebaseAuth);
+};
 
 export const getSessionByToken = (token: string): AttendanceSession | null => {
   const normalizedToken = normalizeToken(token);
@@ -345,11 +358,47 @@ export const getSessionByTokenFromFirebase = async (token: string): Promise<Atte
     return localSession;
   }
 
+  await ensureFirebaseAuthSession();
+
   try {
+    const exactTokenQuery = query(
+      collection(firebaseDb, SESSIONS_COLLECTION),
+      where('token', '==', token.trim())
+    );
+    const exactSnapshot = await getDocs(exactTokenQuery);
+    if (!exactSnapshot.empty) {
+      const sessionDoc = exactSnapshot.docs[0];
+      const data = sessionDoc.data() as {
+        name?: string;
+        token?: string;
+        startTime?: unknown;
+        endTime?: unknown;
+        groupId?: string;
+        createdBy?: string;
+        status?: AttendanceSession['status'];
+      };
+
+      const startTime = toDateValue(data.startTime);
+      const endTime = toDateValue(data.endTime);
+      const now = new Date();
+      const computedStatus: AttendanceSession['status'] = now > endTime ? 'expired' : 'active';
+      const session: AttendanceSession = {
+        id: sessionDoc.id,
+        name: data.name || '',
+        token: data.token || '',
+        startTime,
+        endTime,
+        groupId: data.groupId || '',
+        createdBy: data.createdBy || '',
+        status: data.status || computedStatus,
+      };
+      return session;
+    }
+
     const sessions = await getSessionsFromFirebase();
     return sessions.find((s) => normalizeToken(s.token) === normalizedToken) || null;
-  } catch {
-    return null;
+  } catch (error) {
+    throw error;
   }
 };
 
@@ -362,11 +411,12 @@ export const getRecords = (): AttendanceRecord[] => {
   }));
 };
 
-export const createRecord = (
+export const createRecord = async (
   sessionId: string,
-  userId: string
-): { success: boolean; message: string; record?: AttendanceRecord } => {
-  const session = getSessions().find((s) => s.id === sessionId);
+  userId: string,
+  sessionOverride?: AttendanceSession
+): Promise<{ success: boolean; message: string; record?: AttendanceRecord }> => {
+  const session = sessionOverride || getSessions().find((s) => s.id === sessionId);
   if (!session) {
     return { success: false, message: 'Phiên điểm danh không tồn tại' };
   }
@@ -378,11 +428,53 @@ export const createRecord = (
   if (now > session.endTime) {
     return { success: false, message: 'Phiên điểm danh đã kết thúc' };
   }
+  try {
+    await ensureFirebaseAuthSession();
+  } catch {
+    return { success: false, message: 'Khong the ket noi du lieu diem danh' };
+  }
+
+  try {
+    const groupSnapshot = await getDoc(doc(firebaseDb, GROUPS_COLLECTION, session.groupId));
+    if (groupSnapshot.exists()) {
+      const groupData = groupSnapshot.data() as { memberIds?: string[] };
+      const memberIds = Array.isArray(groupData.memberIds) ? groupData.memberIds : [];
+      if (!memberIds.includes(userId)) {
+        return { success: false, message: 'Bạn không thuộc nhóm của phiên điểm danh này' };
+      }
+    }
+  } catch {
+    // Keep attendance available even if membership check cannot be loaded.
+  }
 
   const records = getRecords();
   const existingRecord = records.find((r) => r.sessionId === sessionId && r.userId === userId);
   if (existingRecord) {
     return { success: false, message: 'Bạn đã điểm danh cho phiên này rồi' };
+  }
+
+  try {
+    const remoteRecordQuery = query(
+      collection(firebaseDb, RECORDS_COLLECTION),
+      where('sessionId', '==', sessionId),
+      where('userId', '==', userId)
+    );
+    const remoteRecordSnapshot = await getDocs(remoteRecordQuery);
+    if (!remoteRecordSnapshot.empty) {
+      return { success: false, message: 'Bạn đã điểm danh cho phiên này rồi' };
+    }
+  } catch (error) {
+    const errorCode = (error as { code?: string } | null)?.code;
+    if (errorCode === 'permission-denied') {
+      return { success: false, message: 'Firestore rules chưa cho phép truy cập attendance_records' };
+    }
+    return { success: false, message: 'Không thể kiểm tra lịch sử điểm danh' };
+  }
+
+  const sessions = getSessions();
+  if (!sessions.find((s) => s.id === session.id)) {
+    sessions.push(session);
+    setSessionsCache(sessions);
   }
 
   const newRecord: AttendanceRecord = {
@@ -396,16 +488,19 @@ export const createRecord = (
   records.push(newRecord);
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
 
-  void addRecordToFirestore({
-    sessionId: newRecord.sessionId,
-    userId: newRecord.userId,
-    timestamp: newRecord.timestamp,
-    status: newRecord.status,
-  }).catch(() => {
-    // Firestore sync is best-effort for realtime admin updates.
-  });
-
-  return { success: true, message: 'Điểm danh thành công', record: newRecord };
+  try {
+    await addRecordToFirestore({
+      sessionId: newRecord.sessionId,
+      userId: newRecord.userId,
+      timestamp: newRecord.timestamp,
+      status: newRecord.status,
+    });
+    return { success: true, message: 'Điểm danh thành công', record: newRecord };
+  } catch {
+    const nextRecords = getRecords().filter((r) => r.id !== newRecord.id);
+    localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(nextRecords));
+    return { success: false, message: 'Không thể đồng bộ điểm danh. Vui lòng thử lại.' };
+  }
 };
 
 export const addRecordToFirestore = async (
@@ -736,7 +831,5 @@ export const removeMemberFromGroup = async (groupId: string, userId: string): Pr
   await updateGroup(groupId, { memberIds: filtered });
   return true;
 };
-
-
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router';
 import { getCurrentUser, logout } from '../../utils/mockData';
 import { Button } from '../ui/button';
@@ -13,14 +13,14 @@ export function UserLayout() {
   useEffect(() => {
     const user = getCurrentUser();
     if (!user || user.role !== 'user') {
-      navigate('/');
+      navigate('/login');
     }
   }, [navigate]);
 
   const handleLogout = () => {
     logout();
-    toast.success('Đã đăng xuất');
-    navigate('/');
+    toast.success('ÄÃ£ Ä‘Äƒng xuáº¥t');
+    navigate('/login');
   };
 
   const currentUser = getCurrentUser();
@@ -29,18 +29,18 @@ export function UserLayout() {
     {
       path: '/user',
       icon: Home,
-      label: 'Trang chủ',
+      label: 'Trang chá»§',
       exact: true,
     },
     {
       path: '/user/scan',
       icon: QrCode,
-      label: 'Quét QR điểm danh',
+      label: 'QuÃ©t QR Ä‘iá»ƒm danh',
     },
     {
       path: '/user/history',
       icon: History,
-      label: 'Lịch sử điểm danh',
+      label: 'Lá»‹ch sá»­ Ä‘iá»ƒm danh',
     },
   ];
 
@@ -61,9 +61,9 @@ export function UserLayout() {
               </div>
               {sidebarOpen && (
                 <div className="min-w-0 flex-1">
-                  <h1 className="font-bold text-gray-900 truncate">Hệ Thống Điểm Danh</h1>
+                  <h1 className="font-bold text-gray-900 truncate">Há»‡ Thá»‘ng Äiá»ƒm Danh</h1>
                   <p className="text-xs text-muted-foreground truncate">
-                    Xin chào, {currentUser?.name}
+                    Xin chÃ o, {currentUser?.name}
                   </p>
                 </div>
               )}
@@ -100,7 +100,7 @@ export function UserLayout() {
               className={`w-full gap-3 ${!sidebarOpen && 'md:justify-center md:px-0'}`}
             >
               <LogOut className="w-5 h-5 flex-shrink-0" />
-              {sidebarOpen && <span>Đăng xuất</span>}
+              {sidebarOpen && <span>ÄÄƒng xuáº¥t</span>}
             </Button>
           </div>
         </div>
@@ -124,7 +124,7 @@ export function UserLayout() {
                 item.exact 
                   ? location.pathname === item.path
                   : location.pathname.startsWith(item.path)
-              )?.label || 'Hệ thống điểm danh'}
+              )?.label || 'Há»‡ thá»‘ng Ä‘iá»ƒm danh'}
             </h2>
           </div>
         </header>

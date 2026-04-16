@@ -1,16 +1,16 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { UserCircle, Lock } from 'lucide-react';
-import { login, getCurrentUser, initializeMockData } from '../utils/mockData';
+import { getCurrentUser, initializeMockData, loginAdminWithFirebase } from '../utils/mockData';
 import { toast } from 'sonner';
 import coverLogin from '../../assets/coverlogin.jpg';
 
-export function LoginPage() {
-  const [studentId, setStudentId] = useState('');
+export function AdminLoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -24,19 +24,19 @@ export function LoginPage() {
     }
   }, [navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const normalizedStudentId = studentId.trim();
-      const user = login(normalizedStudentId, password);
+      const normalizedEmail = email.trim().toLowerCase();
+      const user = await loginAdminWithFirebase(normalizedEmail, password);
 
       if (user) {
         toast.success(`Xin chào, ${user.name}!`);
-        navigate(user.role === 'admin' ? '/admin' : '/user');
+        navigate('/admin');
       } else {
-        toast.error('MSSV hoặc mật khẩu không đúng');
+        toast.error('Email hoặc mật khẩu không đúng');
       }
     } finally {
       setLoading(false);
@@ -53,20 +53,20 @@ export function LoginPage() {
       <div className="w-full max-w-[460px] relative z-10">
         <Card className="border border-white/25 bg-white/60 backdrop-blur-sm shadow-xl">
           <CardHeader className="space-y-1 pb-3 text-center">
-            <CardTitle className="text-xl">Đăng nhập</CardTitle>
+            <CardTitle className="text-xl">Đăng nhập Admin</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="studentId">MSSV</Label>
+                <Label htmlFor="email">Email</Label>
                 <div className="relative">
                   <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
-                    id="studentId"
-                    type="text"
-                    placeholder="Ví dụ: 21110001"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
+                    id="email"
+                    type="email"
+                    placeholder="admin@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-input-background"
                     required
                   />

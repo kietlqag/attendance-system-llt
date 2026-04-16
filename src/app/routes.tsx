@@ -1,7 +1,8 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { UserLayout } from "./components/user/UserLayout";
 import { LoginPage } from "./components/LoginPage";
+import { AdminLoginPage } from "./components/AdminLoginPage";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { CreateSession } from "./components/admin/CreateSession";
 import { SessionDetail } from "./components/admin/SessionDetail";
@@ -17,7 +18,15 @@ import { UserHistory } from "./components/user/UserHistory";
 export const router = createBrowserRouter([
   {
     path: "/",
+    element: <Navigate to="/login" replace />,
+  },
+  {
+    path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/admin/login",
+    element: <AdminLoginPage />,
   },
   {
     path: "/admin",

@@ -3,12 +3,21 @@ import { firebaseAuth } from '../../lib/firebase';
 
 // Mock data vÃ  state quáº£n lÃ½ cho há»‡ thá»‘ng Ä‘iá»ƒm danh
 
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: 'admin' | 'user';
   password: string;
+}
+
+export interface StudentAccount {
+  studentId: string; // MSSV
+  fullName: string;
+  email: string;
+  password: string;
+  userId: string;
 }
 
 export interface AttendanceSession {
@@ -37,38 +46,48 @@ export interface Group {
   memberIds: string[];
 }
 
+// StudentAccount table (fixed)
+export const studentAccounts: StudentAccount[] = [
+  {
+    studentId: '21110001',
+    fullName: 'Tran Thi Binh',
+    email: 'user1@example.com',
+    password: 'user123',
+    userId: 'user1',
+  },
+  {
+    studentId: '21110002',
+    fullName: 'Le Van Cuong',
+    email: 'user2@example.com',
+    password: 'user123',
+    userId: 'user2',
+  },
+  {
+    studentId: '21110003',
+    fullName: 'Pham Thi Dung',
+    email: 'user3@example.com',
+    password: 'user123',
+    userId: 'user3',
+  },
+];
+const studentUsersFromAccounts: User[] = studentAccounts.map((account) => ({
+  id: account.userId,
+  name: account.fullName,
+  email: account.email,
+  role: 'user',
+  password: account.password,
+}));
 // Mock users
 export const mockUsers: User[] = [
   {
     id: 'admin1',
-    name: 'Nguyá»…n VÄƒn An',
+    name: 'Nguyen Van An',
     email: 'admin@example.com',
     role: 'admin',
     password: 'admin123',
   },
-  {
-    id: 'user1',
-    name: 'Tráº§n Thá»‹ BÃ¬nh',
-    email: 'user1@example.com',
-    role: 'user',
-    password: 'user123',
-  },
-  {
-    id: 'user2',
-    name: 'LÃª VÄƒn CÆ°á»ng',
-    email: 'user2@example.com',
-    role: 'user',
-    password: 'user123',
-  },
-  {
-    id: 'user3',
-    name: 'Pháº¡m Thá»‹ Dung',
-    email: 'user3@example.com',
-    role: 'user',
-    password: 'user123',
-  },
+  ...studentUsersFromAccounts,
 ];
-
 // Mock groups
 export const mockGroups: Group[] = [
   {
@@ -160,33 +179,47 @@ export const initializeMockData = () => {
 };
 
 // Auth functions
-export const login = (email: string, password: string): User | null => {
-  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-  const user = users.find((u: User) => u.email === email && u.password === password);
-  if (user) {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
-    return user;
+export const login = (studentId: string, password: string): User | null => {
+  const normalizedStudentId = studentId.trim().toLowerCase();
+  const account = studentAccounts.find(
+    (a) => a.studentId.trim().toLowerCase() === normalizedStudentId && a.password === password
+  );
+  if (!account) {
+    return null;
   }
-  return null;
+  const users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]') as User[];
+  const user =
+    users.find((u) => u.id === account.userId && u.role === 'user') || {
+      id: account.userId,
+      name: account.fullName,
+      email: account.email,
+      role: 'user' as const,
+      password: account.password,
+    };
+  localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+  return user;
 };
 
 export const loginAdminWithFirebase = async (email: string, password: string): Promise<User | null> => {
   const normalizedEmail = email.trim().toLowerCase();
-  const users = getUsers();
-  const adminUser = users.find(
-    (u) => u.role === 'admin' && u.email.trim().toLowerCase() === normalizedEmail
-  );
-  if (!adminUser) {
-    return null;
-  }
+
   try {
-    await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+    const credential = await signInWithEmailAndPassword(firebaseAuth, normalizedEmail, password);
+    const firebaseEmail = credential.user.email ?? normalizedEmail;
+    const adminUser: User = {
+      id: `firebase-admin-${credential.user.uid}`,
+      name: credential.user.displayName || 'Quản trị viên',
+      email: firebaseEmail,
+      role: 'admin',
+      password: '',
+    };
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(adminUser));
     return adminUser;
   } catch {
     return null;
   }
 };
+
 export const logout = () => {
   localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   signOut(firebaseAuth).catch(() => undefined);
@@ -373,3 +406,6 @@ export const removeMemberFromGroup = (groupId: string, userId: string): boolean 
   updateGroup(groupId, { memberIds: filtered });
   return true;
 };
+
+
+

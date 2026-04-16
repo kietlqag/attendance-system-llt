@@ -2,20 +2,35 @@
 import { Outlet, useNavigate, Link, useLocation } from 'react-router';
 import { getCurrentUser, logout } from '../../utils/mockData';
 import { Button } from '../ui/button';
-import { LogOut, LayoutDashboard, Calendar, Users, Menu, X, UserCog } from 'lucide-react';
+import { LogOut, LayoutDashboard, Calendar, Users, Menu, X } from 'lucide-react';
 import { toast } from 'sonner';
 import appLogo from '../../../assets/LogoCLBLLT-NoBG.png';
+import { onAuthStateChanged } from 'firebase/auth';
+import { firebaseAuth } from '../../../lib/firebase';
 
 export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
     if (!user || user.role !== 'admin') {
-      navigate('/admin/login');
+      navigate('/admin/login', { replace: true });
+      return;
     }
+
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
+      if (!firebaseUser) {
+        logout();
+        navigate('/admin/login', { replace: true });
+        return;
+      }
+      setAuthReady(true);
+    });
+
+    return () => unsubscribe();
   }, [navigate]);
 
   const handleLogout = () => {
@@ -24,17 +39,16 @@ export function AdminLayout() {
     navigate('/admin/login');
   };
 
+  if (!authReady) {
+    return null;
+  }
+
   const menuItems = [
     {
       path: '/admin',
       icon: LayoutDashboard,
       label: 'Tổng quan',
       exact: true,
-    },
-    {
-      path: '/admin/users',
-      icon: UserCog,
-      label: 'Quản lý sinh viên',
     },
     {
       path: '/admin/groups',
@@ -48,8 +62,24 @@ export function AdminLayout() {
     },
   ];
 
+  const isSessionRoute =
+    location.pathname === '/admin/create-session' || location.pathname.startsWith('/admin/session/');
+
+  const getHeaderTitle = () => {
+    if (location.pathname === '/admin' || location.pathname === '/admin/') {
+      return 'Tổng quan';
+    }
+    if (location.pathname.startsWith('/admin/groups')) {
+      return 'Quản lý lớp';
+    }
+    if (location.pathname.startsWith('/admin/sessions') || isSessionRoute) {
+      return 'Quản lý phiên điểm danh';
+    }
+    return 'Tổng quan';
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex">
       <aside
         className={`bg-white border-r-2 border-primary/20 shadow-lg transition-all duration-300 ${
           sidebarOpen ? 'w-64' : 'w-0 md:w-20'
@@ -67,9 +97,11 @@ export function AdminLayout() {
           <nav className="flex-1 p-4 space-y-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
-              const active = item.exact
-                ? location.pathname === item.path
-                : location.pathname.startsWith(item.path) && item.path !== '/admin';
+              const active = item.path === '/admin/sessions'
+                ? location.pathname.startsWith('/admin/sessions') || isSessionRoute
+                : item.exact
+                  ? location.pathname === item.path
+                  : location.pathname.startsWith(item.path) && item.path !== '/admin';
 
               return (
                 <Link key={item.path} to={item.path}>
@@ -110,9 +142,7 @@ export function AdminLayout() {
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
             <h2 className="font-semibold text-lg text-gray-900">
-              {menuItems.find((item) =>
-                item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path)
-              )?.label || 'Quản trị hệ thống'}
+              {getHeaderTitle()}
             </h2>
           </div>
         </header>

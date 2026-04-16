@@ -7,7 +7,7 @@ import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { 
-  getGroups, 
+  getGroupsFromFirebase, 
   getUsers, 
   addMemberToGroup, 
   removeMemberFromGroup,
@@ -54,13 +54,13 @@ export function GroupDetail() {
   });
 
   useEffect(() => {
-    loadGroup();
+    void loadGroup();
   }, [groupId]);
 
-  const loadGroup = () => {
+  const loadGroup = async () => {
     if (!groupId) return;
 
-    const groups = getGroups();
+    const groups = await getGroupsFromFirebase();
     const foundGroup = groups.find(g => g.id === groupId);
     if (foundGroup) {
       setGroup(foundGroup);
@@ -80,13 +80,13 @@ export function GroupDetail() {
     }
   };
 
-  const handleAddMember = (userId: string) => {
+  const handleAddMember = async (userId: string) => {
     if (!groupId) return;
 
-    const success = addMemberToGroup(groupId, userId);
+    const success = await addMemberToGroup(groupId, userId);
     if (success) {
       toast.success('Đã thêm thành viên');
-      loadGroup();
+      await loadGroup();
       setAddDialogOpen(false);
     } else {
       toast.error('Không thể thêm thành viên');
@@ -98,13 +98,13 @@ export function GroupDetail() {
     setRemoveDialogOpen(true);
   };
 
-  const handleRemoveConfirm = () => {
+  const handleRemoveConfirm = async () => {
     if (!groupId || !userToRemove) return;
 
-    const success = removeMemberFromGroup(groupId, userToRemove);
+    const success = await removeMemberFromGroup(groupId, userToRemove);
     if (success) {
       toast.success('Đã xóa thành viên');
-      loadGroup();
+      await loadGroup();
     } else {
       toast.error('Không thể xóa thành viên');
     }
@@ -112,7 +112,7 @@ export function GroupDetail() {
     setUserToRemove(null);
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!newUserForm.name.trim() || !newUserForm.email.trim()) {
@@ -136,13 +136,13 @@ export function GroupDetail() {
 
     // Add to group if we have a groupId
     if (groupId) {
-      addMemberToGroup(groupId, newUser.id);
+      await addMemberToGroup(groupId, newUser.id);
     }
 
     toast.success(`Đã tạo tài khoản cho ${newUser.name}`);
     setNewUserForm({ name: '', email: '', password: 'user123' });
     setCreateDialogOpen(false);
-    loadGroup();
+    await loadGroup();
   };
 
   if (!group) {
@@ -301,7 +301,7 @@ export function GroupDetail() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Tạo tài khoản sinh viên/nhân viên mới</DialogTitle>
+            <DialogTitle>T?o t?i kho?n sinh vi?n m?i</DialogTitle>
             <DialogDescription>
               Tài khoản mới sẽ được tự động thêm vào lớp/nhóm này
             </DialogDescription>

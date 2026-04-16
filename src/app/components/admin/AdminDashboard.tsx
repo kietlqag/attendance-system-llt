@@ -3,40 +3,42 @@ import { Link } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { getSessions, getGroups, getUsers, getRecordsBySession } from '../../utils/mockData';
+import { getSessionsFromFirebase, getGroupsFromFirebase, getStudentAccountsFromFirebase } from '../../utils/mockData';
 import { Calendar, Users, QrCode, Clock, ChevronRight } from 'lucide-react';
-import type { AttendanceSession, Group } from '../../utils/mockData';
+import type { AttendanceSession, Group, StudentAccount } from '../../utils/mockData';
 
 export function AdminDashboard() {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [studentAccounts, setStudentAccounts] = useState<StudentAccount[]>([]);
 
   useEffect(() => {
-    loadData();
+    const loadData = async () => {
+      try {
+        const [allSessions, allGroups, allStudentAccounts] = await Promise.all([
+          getSessionsFromFirebase(),
+          getGroupsFromFirebase(),
+          getStudentAccountsFromFirebase(),
+        ]);
+        const sorted = [...allSessions].sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+        setSessions(sorted);
+        setGroups(allGroups);
+        setStudentAccounts(allStudentAccounts);
+      } catch {
+        setSessions([]);
+        setGroups([]);
+        setStudentAccounts([]);
+      }
+    };
+
+    void loadData();
   }, []);
 
-  const loadData = () => {
-    const allSessions = getSessions();
-    // Sort by start time, newest first
-    const sorted = [...allSessions].sort((a, b) => 
-      b.startTime.getTime() - a.startTime.getTime()
-    );
-    setSessions(sorted);
-    setGroups(getGroups());
-  };
-
-  // Statistics
-  const activeSessions = sessions.filter(s => {
-    const now = new Date();
-    return now <= s.endTime;
-  }).length;
-
-  const allUsers = getUsers();
-  const totalMembers = allUsers.filter(u => u.role === 'user').length;
+  const activeSessions = sessions.filter((s) => new Date() <= s.endTime).length;
+  const totalMembers = studentAccounts.length;
 
   return (
     <div className="space-y-8">
-      {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link to="/admin/sessions">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 border-primary/20">
@@ -45,15 +47,11 @@ export function AdminDashboard() {
                 <Calendar className="w-5 h-5 text-primary" />
                 Quản lý phiên điểm danh
               </CardTitle>
-              <CardDescription>
-                Xem và quản lý tất cả các phiên điểm danh
-              </CardDescription>
+              <CardDescription>Xem và quản lý tất cả các phiên điểm danh</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary mb-2">{sessions.length}</div>
-              <p className="text-sm text-muted-foreground">
-                {activeSessions} phiên đang hoạt động
-              </p>
+              <p className="text-sm text-muted-foreground">{activeSessions} phiên đang hoạt động</p>
             </CardContent>
           </Card>
         </Link>
@@ -63,23 +61,18 @@ export function AdminDashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-accent" />
-                Quản lý lớp/nhóm
+                Quản lý lớp
               </CardTitle>
-              <CardDescription>
-                Quản lý lớp học và thành viên
-              </CardDescription>
+              <CardDescription>Quản lý lớp và thành viên</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-accent mb-2">{groups.length}</div>
-              <p className="text-sm text-muted-foreground">
-                {totalMembers} thành viên
-              </p>
+              <p className="text-sm text-muted-foreground">{totalMembers} thành viên</p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
-      {/* Recent Sessions */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold">Phiên điểm danh gần đây</h2>
@@ -96,9 +89,7 @@ export function AdminDashboard() {
             <Card>
               <CardContent className="py-12 text-center">
                 <QrCode className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">
-                  Chưa có phiên điểm danh nào. Tạo phiên đầu tiên của bạn!
-                </p>
+                <p className="text-muted-foreground mb-4">Chưa có phiên điểm danh nào.</p>
                 <Link to="/admin/create-session">
                   <Button>
                     <QrCode className="w-4 h-4 mr-2" />
@@ -109,10 +100,8 @@ export function AdminDashboard() {
             </Card>
           ) : (
             sessions.slice(0, 5).map((session) => {
-              const now = new Date();
-              const endTime = new Date(session.endTime);
-              const isActive = now <= endTime;
-              const group = groups.find(g => g.id === session.groupId);
+              const isActive = new Date() <= new Date(session.endTime);
+              const group = groups.find((g) => g.id === session.groupId);
 
               return (
                 <Card key={session.id} className="hover:shadow-lg transition-shadow border-2">
@@ -120,9 +109,11 @@ export function AdminDashboard() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-start gap-3">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                            isActive ? 'bg-primary/10' : 'bg-gray-100'
-                          }`}>
+                          <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                              isActive ? 'bg-primary/10' : 'bg-gray-100'
+                            }`}
+                          >
                             <QrCode className={`w-6 h-6 ${isActive ? 'text-primary' : 'text-gray-600'}`} />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -132,17 +123,15 @@ export function AdminDashboard() {
                                 {isActive ? 'Đang hoạt động' : 'Đã kết thúc'}
                               </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground mb-3">
-                              {group?.name || 'Không có nhóm'}
-                            </p>
+                            <p className="text-sm text-muted-foreground mb-3">{group?.name || 'Không có nhóm'}</p>
                             <div className="flex flex-wrap gap-4 text-sm">
                               <div className="flex items-center gap-1.5 text-muted-foreground">
                                 <Clock className="w-4 h-4" />
                                 {new Date(session.endTime).toLocaleString('vi-VN')}
                               </div>
                               <div className="flex items-center gap-1.5 text-muted-foreground">
-                                <Users className="w-4 h-4" />
-                                {getRecordsBySession(session.id).length} lượt điểm danh
+                                <QrCode className="w-4 h-4" />
+                                Mã: {session.token}
                               </div>
                             </div>
                           </div>
@@ -164,9 +153,7 @@ export function AdminDashboard() {
         {sessions.length > 5 && (
           <div className="mt-4 text-center">
             <Link to="/admin/sessions">
-              <Button variant="outline">
-                Xem tất cả phiên điểm danh
-              </Button>
+              <Button variant="outline">Xem tất cả phiên điểm danh</Button>
             </Link>
           </div>
         )}

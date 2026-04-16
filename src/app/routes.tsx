@@ -10,7 +10,6 @@ import { SessionManagement } from "./components/admin/SessionManagement";
 import { GroupManagement } from "./components/admin/GroupManagement";
 import { CreateGroup } from "./components/admin/CreateGroup";
 import { GroupDetail } from "./components/admin/GroupDetail";
-import { UserManagement } from "./components/admin/UserManagement";
 import { UserDashboard } from "./components/user/UserDashboard";
 import { ScanQR } from "./components/user/ScanQR";
 import { UserHistory } from "./components/user/UserHistory";
@@ -35,10 +34,6 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <AdminDashboard />,
-      },
-      {
-        path: "users",
-        element: <UserManagement />,
       },
       {
         path: "sessions",

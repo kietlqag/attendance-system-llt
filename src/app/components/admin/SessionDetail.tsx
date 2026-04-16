@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { getSessions, getRecordsBySession, getGroups, getUserById } from '../../utils/mockData';
+import { getSessionsFromFirebase, getRecordsBySession, getGroupsFromFirebase, getUserById } from '../../utils/mockData';
 import { QRCodeSVG } from 'qrcode.react';
 import { Calendar, Clock, Users, Download, Copy, ArrowLeft, QrCode } from 'lucide-react';
 import { format } from 'date-fns';
@@ -17,16 +17,22 @@ export function SessionDetail() {
   const navigate = useNavigate();
   const [session, setSession] = useState<AttendanceSession | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
 
   useEffect(() => {
-    if (sessionId) {
-      const sessions = getSessions();
-      const foundSession = sessions.find(s => s.id === sessionId);
-      if (foundSession) {
-        setSession(foundSession);
-        setRecords(getRecordsBySession(sessionId));
+    const loadData = async () => {
+      if (sessionId) {
+        const sessions = await getSessionsFromFirebase();
+        const foundSession = sessions.find(s => s.id === sessionId);
+        if (foundSession) {
+          setSession(foundSession);
+          setRecords(getRecordsBySession(sessionId));
+        }
       }
-    }
+      setGroups(await getGroupsFromFirebase());
+    };
+
+    void loadData();
   }, [sessionId]);
 
   if (!session) {
@@ -37,7 +43,7 @@ export function SessionDetail() {
     );
   }
 
-  const group = getGroups().find(g => g.id === session.groupId);
+  const group = groups.find(g => g.id === session.groupId);
   const now = new Date();
   const isActive = now >= session.startTime && now <= session.endTime;
   const isUpcoming = now < session.startTime;
@@ -257,3 +263,4 @@ export function SessionDetail() {
     </div>
   );
 }
+

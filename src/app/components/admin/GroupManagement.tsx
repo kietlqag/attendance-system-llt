@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { getGroups, deleteGroup } from '../../utils/mockData';
+import { getGroupsFromFirebase, deleteGroup } from '../../utils/mockData';
 import { Users, Plus, ChevronRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Group } from '../../utils/mockData';
@@ -24,11 +24,12 @@ export function GroupManagement() {
   const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    loadGroups();
+    void loadGroups();
   }, []);
 
-  const loadGroups = () => {
-    setGroups(getGroups());
+  const loadGroups = async () => {
+    const remoteGroups = await getGroupsFromFirebase();
+    setGroups(remoteGroups);
   };
 
   const handleDeleteClick = (groupId: string) => {
@@ -36,12 +37,12 @@ export function GroupManagement() {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (groupToDelete) {
-      const success = deleteGroup(groupToDelete);
+      const success = await deleteGroup(groupToDelete);
       if (success) {
         toast.success('Đã xóa lớp/nhóm');
-        loadGroups();
+        await loadGroups();
       } else {
         toast.error('Không thể xóa lớp/nhóm');
       }
@@ -52,13 +53,7 @@ export function GroupManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Quản lý lớp/nhóm</h1>
-          <p className="text-muted-foreground">
-            Quản lý danh sách lớp học và thành viên
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <Link to="/admin/groups/create">
           <Button className="gap-2">
             <Plus className="w-4 h-4" />
@@ -67,75 +62,13 @@ export function GroupManagement() {
         </Link>
       </div>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-2 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tổng số lớp/nhóm</CardTitle>
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Users className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">{groups.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              đang hoạt động
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tổng thành viên</CardTitle>
-            <div className="w-10 h-10 bg-accent/20 rounded-lg flex items-center justify-center">
-              <Users className="h-5 w-5 text-accent" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {groups.reduce((sum, g) => sum + g.memberIds.length, 0)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              sinh viên/nhân viên
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Trung bình</CardTitle>
-            <div className="w-10 h-10 bg-secondary/50 rounded-lg flex items-center justify-center">
-              <Users className="h-5 w-5 text-secondary-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {groups.length > 0 
-                ? Math.round(groups.reduce((sum, g) => sum + g.memberIds.length, 0) / groups.length)
-                : 0}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              thành viên/lớp
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Groups List */}
       <div className="space-y-4">
         {groups.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center">
-              <Users className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-4">
-                Chưa có lớp/nhóm nào. Tạo lớp đầu tiên của bạn!
-              </p>
-              <Link to="/admin/groups/create">
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Tạo lớp/nhóm mới
-                </Button>
-              </Link>
+            <CardContent className="py-20 text-center">
+              <Users className="w-16 h-16 mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">Chưa có lớp/nhóm nào</p>
             </CardContent>
           </Card>
         ) : (
@@ -199,3 +132,4 @@ export function GroupManagement() {
     </div>
   );
 }
+

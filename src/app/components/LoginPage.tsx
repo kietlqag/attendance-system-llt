@@ -24,13 +24,13 @@ export function LoginPage() {
     }
   }, [navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       const normalizedStudentId = studentId.trim();
-      const user = login(normalizedStudentId, password);
+      const user = await login(normalizedStudentId, password);
 
       if (user) {
         toast.success(`Xin chào, ${user.name}!`);
@@ -38,6 +38,9 @@ export function LoginPage() {
       } else {
         toast.error('MSSV hoặc mật khẩu không đúng');
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Lỗi không xác định';
+      toast.error(`Không thể đăng nhập: ${message}`);
     } finally {
       setLoading(false);
     }

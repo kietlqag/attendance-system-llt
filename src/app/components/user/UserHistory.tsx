@@ -23,8 +23,8 @@ export function UserHistory() {
     const sessions = getSessions();
 
     const recordsWithSession = userRecords
-      .map(record => {
-        const session = sessions.find(s => s.id === record.sessionId);
+      .map((record) => {
+        const session = sessions.find((s) => s.id === record.sessionId);
         return {
           ...record,
           sessionName: session?.name || 'Không xác định',
@@ -39,14 +39,10 @@ export function UserHistory() {
   useEffect(() => {
     let filtered = [...records];
 
-    // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(record =>
-        record.sessionName.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      filtered = filtered.filter((record) => record.sessionName.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
-    // Filter by period
     if (filterPeriod !== 'all') {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -55,10 +51,10 @@ export function UserHistory() {
 
       switch (filterPeriod) {
         case 'today':
-          filtered = filtered.filter(r => r.timestamp >= todayStart);
+          filtered = filtered.filter((r) => r.timestamp >= todayStart);
           break;
         case 'thisMonth':
-          filtered = filtered.filter(r => r.timestamp >= monthStart && r.timestamp <= monthEnd);
+          filtered = filtered.filter((r) => r.timestamp >= monthStart && r.timestamp <= monthEnd);
           break;
       }
     }
@@ -66,9 +62,8 @@ export function UserHistory() {
     setFilteredRecords(filtered);
   }, [searchTerm, filterPeriod, records]);
 
-  // Group records by date
   const groupedRecords: Record<string, typeof filteredRecords> = {};
-  filteredRecords.forEach(record => {
+  filteredRecords.forEach((record) => {
     const dateKey = format(record.timestamp, 'dd/MM/yyyy', { locale: vi });
     if (!groupedRecords[dateKey]) {
       groupedRecords[dateKey] = [];
@@ -78,70 +73,6 @@ export function UserHistory() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Lịch sử điểm danh</h1>
-        <p className="text-muted-foreground">
-          Xem lại tất cả các lần điểm danh của bạn
-        </p>
-      </div>
-
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-2">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Tổng số lần</p>
-                <p className="text-2xl font-bold text-primary">{records.length}</p>
-              </div>
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Tháng này</p>
-                <p className="text-2xl font-bold">
-                  {records.filter(r => {
-                    const now = new Date();
-                    return r.timestamp >= startOfMonth(now) && r.timestamp <= endOfMonth(now);
-                  }).length}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-accent" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Hôm nay</p>
-                <p className="text-2xl font-bold">
-                  {records.filter(r => {
-                    const now = new Date();
-                    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    return r.timestamp >= todayStart;
-                  }).length}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-secondary/50 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-secondary-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
       <Card className="border-2">
         <CardHeader>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -171,15 +102,12 @@ export function UserHistory() {
         </CardHeader>
       </Card>
 
-      {/* History List */}
       {Object.keys(groupedRecords).length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <CheckCircle className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
-              {searchTerm || filterPeriod !== 'all'
-                ? 'Không tìm thấy kết quả phù hợp'
-                : 'Bạn chưa có lịch sử điểm danh'}
+              {searchTerm || filterPeriod !== 'all' ? 'Không tìm thấy kết quả phù hợp' : 'Bạn chưa có lịch sử điểm danh'}
             </p>
           </CardContent>
         </Card>
@@ -192,9 +120,7 @@ export function UserHistory() {
                   <Calendar className="w-5 h-5" />
                   {date}
                 </CardTitle>
-                <CardDescription>
-                  {dateRecords.length} lần điểm danh
-                </CardDescription>
+                <CardDescription>{dateRecords.length} lần điểm danh</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">

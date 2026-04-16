@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { getCurrentUser, getSessionByToken, createRecord } from '../../utils/mockData';
+import { getCurrentUser, getSessionByTokenFromFirebase, createRecord } from '../../utils/mockData';
 import { QrCode, Keyboard, CheckCircle, XCircle, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -17,21 +17,20 @@ export function ScanQR() {
 
   useEffect(() => {
     return () => {
-      // Cleanup scanner on unmount
       if (html5QrCode) {
         html5QrCode.stop().catch(() => {});
       }
     };
   }, [html5QrCode]);
 
-  const handleAttendance = (token: string) => {
+  const handleAttendance = async (token: string) => {
     const currentUser = getCurrentUser();
     if (!currentUser) {
       toast.error('Vui lòng đăng nhập lại');
       return;
     }
 
-    const session = getSessionByToken(token);
+    const session = await getSessionByTokenFromFirebase(token);
     if (!session) {
       setResult({
         success: false,
@@ -60,7 +59,7 @@ export function ScanQR() {
       toast.error('Vui lòng nhập mã điểm danh');
       return;
     }
-    handleAttendance(manualToken.trim());
+    void handleAttendance(manualToken.trim());
   };
 
   const startScanner = async () => {
@@ -78,16 +77,16 @@ export function ScanQR() {
           qrbox: { width: 250, height: 250 },
         },
         (decodedText) => {
-          handleAttendance(decodedText);
+          void handleAttendance(decodedText);
           scanner.stop().then(() => {
             setScanning(false);
           });
         },
-        (errorMessage) => {
+        () => {
           // Ignore errors while scanning
         }
       );
-    } catch (err) {
+    } catch {
       toast.error('Không thể khởi động camera. Vui lòng nhập mã thủ công.');
       setScanning(false);
     }
@@ -103,14 +102,6 @@ export function ScanQR() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Điểm danh</h1>
-        <p className="text-muted-foreground">
-          Quét QR code hoặc nhập mã điểm danh thủ công
-        </p>
-      </div>
-
-      {/* Result Display */}
       {result && (
         <Card className={`border-2 ${result.success ? 'border-primary bg-primary/5' : 'border-destructive bg-destructive/5'}`}>
           <CardContent className="p-6">
@@ -137,7 +128,6 @@ export function ScanQR() {
         </Card>
       )}
 
-      {/* Tabs for QR Scan and Manual Input */}
       <Tabs defaultValue="scan" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="scan" className="gap-2">
@@ -157,9 +147,7 @@ export function ScanQR() {
                 <QrCode className="w-5 h-5" />
                 Quét QR Code
               </CardTitle>
-              <CardDescription>
-                Sử dụng camera để quét mã QR điểm danh
-              </CardDescription>
+              <CardDescription>Sử dụng camera để quét mã QR điểm danh</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!scanning ? (
@@ -179,9 +167,9 @@ export function ScanQR() {
                   <div className="bg-primary/5 p-4 rounded-lg">
                     <p className="text-sm font-semibold mb-2">Lưu ý:</p>
                     <ul className="text-sm text-muted-foreground space-y-1">
-                      <li>• Cho phép trình duyệt truy cập camera</li>
-                      <li>• Đưa QR code vào khung hình</li>
-                      <li>• Giữ camera ổn định để quét</li>
+                      <li>- Cho phép trình duyệt truy cập camera</li>
+                      <li>- Đưa QR code vào khung hình</li>
+                      <li>- Giữ camera ổn định để quét</li>
                     </ul>
                   </div>
                 </div>
@@ -204,9 +192,7 @@ export function ScanQR() {
                 <Keyboard className="w-5 h-5" />
                 Nhập mã thủ công
               </CardTitle>
-              <CardDescription>
-                Nhập mã điểm danh được cung cấp bởi giảng viên
-              </CardDescription>
+              <CardDescription>Nhập mã điểm danh được cung cấp bởi giảng viên</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleManualSubmit} className="space-y-4">
@@ -228,26 +214,6 @@ export function ScanQR() {
                 <Button type="submit" className="w-full" size="lg">
                   Điểm danh
                 </Button>
-
-                <div className="bg-primary/5 p-4 rounded-lg">
-                  <p className="text-sm font-semibold mb-2">Mã demo để thử:</p>
-                  <div className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => setManualToken('ATT-2026-001')}
-                      className="text-sm text-primary hover:underline block"
-                    >
-                      • ATT-2026-001 (Đang hoạt động)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setManualToken('ATT-2026-002')}
-                      className="text-sm text-muted-foreground hover:underline block"
-                    >
-                      • ATT-2026-002 (Đã hết hạn)
-                    </button>
-                  </div>
-                </div>
               </form>
             </CardContent>
           </Card>

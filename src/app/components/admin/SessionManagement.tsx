@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { getSessions, getGroups, getRecordsBySession } from '../../utils/mockData';
+import { getSessionsFromFirebase, getGroupsFromFirebase, getRecordsBySession } from '../../utils/mockData';
 import { Plus, Calendar, Clock, Users, ChevronRight, CheckCircle, XCircle } from 'lucide-react';
 import type { AttendanceSession, Group } from '../../utils/mockData';
 
@@ -12,28 +12,29 @@ export function SessionManagement() {
   const [groups, setGroups] = useState<Group[]>([]);
 
   useEffect(() => {
-    loadSessions();
-    setGroups(getGroups());
+    const loadData = async () => {
+      try {
+        const [allSessions, allGroups] = await Promise.all([getSessionsFromFirebase(), getGroupsFromFirebase()]);
+        const sorted = [...allSessions].sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+        setSessions(sorted);
+        setGroups(allGroups);
+      } catch {
+        setSessions([]);
+        setGroups([]);
+      }
+    };
+    void loadData();
   }, []);
 
-  const loadSessions = () => {
-    const allSessions = getSessions();
-    // Sort by start time, newest first
-    const sorted = [...allSessions].sort((a, b) => 
-      b.startTime.getTime() - a.startTime.getTime()
-    );
-    setSessions(sorted);
-  };
-
   const getGroupName = (groupId: string) => {
-    const group = groups.find(g => g.id === groupId);
+    const group = groups.find((g) => g.id === groupId);
     return group?.name || 'Không xác định';
   };
 
   const getStatusBadge = (session: AttendanceSession) => {
     const now = new Date();
     const endTime = new Date(session.endTime);
-    
+
     if (now > endTime) {
       return (
         <Badge variant="secondary" className="gap-1">
@@ -42,7 +43,7 @@ export function SessionManagement() {
         </Badge>
       );
     }
-    
+
     return (
       <Badge variant="default" className="gap-1">
         <CheckCircle className="w-3 h-3" />
@@ -51,18 +52,12 @@ export function SessionManagement() {
     );
   };
 
-  const activeSessions = sessions.filter(s => new Date() <= new Date(s.endTime));
-  const completedSessions = sessions.filter(s => new Date() > new Date(s.endTime));
+  const activeSessions = sessions.filter((s) => new Date() <= new Date(s.endTime));
+  const completedSessions = sessions.filter((s) => new Date() > new Date(s.endTime));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Quản lý phiên điểm danh</h1>
-          <p className="text-muted-foreground">
-            Xem và quản lý tất cả các phiên điểm danh
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <Link to="/admin/create-session">
           <Button className="gap-2">
             <Plus className="w-4 h-4" />
@@ -71,55 +66,6 @@ export function SessionManagement() {
         </Link>
       </div>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-2 border-primary/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tổng số phiên</CardTitle>
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Calendar className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">{sessions.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              phiên điểm danh
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đang hoạt động</CardTitle>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">{activeSessions.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              phiên đang mở
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đã kết thúc</CardTitle>
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <XCircle className="h-5 w-5 text-gray-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-600">{completedSessions.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              phiên đã đóng
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Active Sessions */}
       {activeSessions.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -168,7 +114,6 @@ export function SessionManagement() {
         </div>
       )}
 
-      {/* Completed Sessions */}
       {completedSessions.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -217,20 +162,11 @@ export function SessionManagement() {
         </div>
       )}
 
-      {/* Empty State */}
       {sessions.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
             <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">
-              Chưa có phiên điểm danh nào. Tạo phiên đầu tiên của bạn!
-            </p>
-            <Link to="/admin/create-session">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Tạo phiên mới
-              </Button>
-            </Link>
+            <p className="text-muted-foreground mb-4">Chưa có phiên điểm danh nào. Tạo phiên đầu tiên của bạn!</p>
           </CardContent>
         </Card>
       )}

@@ -1,18 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { createSession, getGroups, getCurrentUser } from '../../utils/mockData';
+import { createSession, getGroupsFromFirebase, getCurrentUser, type Group } from '../../utils/mockData';
 import { toast } from 'sonner';
 import { Calendar, Clock, Users, Plus } from 'lucide-react';
+import { firebaseAuth } from '../../../lib/firebase';
 
 export function CreateSession() {
   const navigate = useNavigate();
-  const groups = getGroups();
+  const [groups, setGroups] = useState<Group[]>([]);
   const currentUser = getCurrentUser();
+
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        setGroups(await getGroupsFromFirebase());
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Lỗi không xác định';
+        toast.error(`Không thể tải danh sách lớp: ${message}`);
+      }
+    };
+    void loadGroups();
+  }, []);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -23,11 +36,17 @@ export function CreateSession() {
     endTime: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.name || !formData.groupId || !formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
       toast.error('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+
+    if (!firebaseAuth.currentUser) {
+      toast.error('Phiên đăng nhập admin đã hết. Vui lòng đăng nhập lại.');
+      navigate('/admin/login');
       return;
     }
 
@@ -39,41 +58,47 @@ export function CreateSession() {
       return;
     }
 
-    const newSession = createSession({
-      name: formData.name,
-      groupId: formData.groupId,
-      startTime: startDateTime,
-      endTime: endDateTime,
-      createdBy: currentUser?.id || '',
-      status: 'active',
-    });
+    try {
+      const newSession = await createSession({
+        name: formData.name.trim(),
+        groupId: formData.groupId,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        createdBy: currentUser?.id || '',
+        status: 'active',
+      });
 
-    toast.success('Tạo phiên điểm danh thành công!');
-    navigate(`/admin/session/${newSession.id}`);
+      toast.success('Tạo phiên điểm danh thành công!');
+      navigate(`/admin/session/${newSession.id}`);
+    } catch (error) {
+      const firebaseCode =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code?: unknown }).code ?? '')
+          : '';
+      if (firebaseCode.includes('permission-denied')) {
+        toast.error('Firestore chưa cấp quyền ghi cho tài khoản hiện tại.');
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Lỗi không xác định';
+      toast.error(`Không thể tạo phiên: ${message}`);
+    }
   };
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Tạo phiên điểm danh mới</h1>
-        <p className="text-muted-foreground">
-          Điền thông tin để tạo phiên điểm danh mới cho lớp/nhóm của bạn
-        </p>
       </div>
 
       <Card className="border-2">
         <CardHeader>
           <CardTitle>Thông tin phiên điểm danh</CardTitle>
-          <CardDescription>
-            Hệ thống sẽ tự động tạo mã QR và token điểm danh
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Session Name */}
             <div className="space-y-2">
               <Label htmlFor="name" className="flex items-center gap-2">
-                <Plus className="w-4 h-4" />
+                <Users className="w-4 h-4" />
                 Tên buổi điểm danh
               </Label>
               <Input
@@ -86,16 +111,12 @@ export function CreateSession() {
               />
             </div>
 
-            {/* Group Selection */}
             <div className="space-y-2">
               <Label htmlFor="group" className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 Lớp/Nhóm
               </Label>
-              <Select
-                value={formData.groupId}
-                onValueChange={(value) => setFormData({ ...formData, groupId: value })}
-              >
+              <Select value={formData.groupId} onValueChange={(value) => setFormData({ ...formData, groupId: value })}>
                 <SelectTrigger className="bg-input-background">
                   <SelectValue placeholder="Chọn lớp/nhóm" />
                 </SelectTrigger>
@@ -109,7 +130,6 @@ export function CreateSession() {
               </Select>
             </div>
 
-            {/* Start Date & Time */}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="startDate" className="flex items-center gap-2">
@@ -141,7 +161,6 @@ export function CreateSession() {
               </div>
             </div>
 
-            {/* End Date & Time */}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="endDate" className="flex items-center gap-2">
@@ -173,16 +192,11 @@ export function CreateSession() {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3 pt-4">
               <Button type="submit" className="flex-1">
                 Tạo phiên điểm danh
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate('/admin')}
-              >
+              <Button type="button" variant="outline" onClick={() => navigate('/admin')}>
                 Hủy
               </Button>
             </div>

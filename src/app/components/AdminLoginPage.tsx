@@ -43,8 +43,8 @@ export function AdminLoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-end justify-center p-4 md:p-6 bg-center bg-no-repeat relative"
-      style={{ backgroundImage: `url(${coverLogin})`, backgroundSize: '115%', backgroundPosition: 'center 80%' }}
+      className="min-h-screen flex items-start justify-center pt-16 pb-12 px-4 md:px-6 bg-center bg-no-repeat relative"
+      style={{ minHeight: '100vh', backgroundImage: `url(${coverLogin})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}
     >
       <div className="absolute inset-0 bg-black/45" />
 

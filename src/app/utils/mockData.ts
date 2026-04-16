@@ -71,12 +71,24 @@ const STORAGE_KEYS = {
   GROUPS: 'attendance_groups',
   USERS: 'attendance_users',
   STUDENT_ACCOUNTS: 'attendance_student_accounts',
+  DEVICE_ID: 'attendance_device_id',
+  DEVICE_BOUND_STUDENT_ID: 'attendance_device_bound_student_id',
 };
 
 const GROUPS_COLLECTION = 'groups';
 const SESSIONS_COLLECTION = 'sessions';
 const STUDENT_ACCOUNTS_COLLECTION = 'studentAccounts';
 const RECORDS_COLLECTION = 'attendance_records';
+const DEVICE_BINDINGS_COLLECTION = 'device_bindings';
+
+interface DeviceBinding {
+  deviceId: string;
+  studentId: string;
+  userId: string;
+  email: string;
+  boundAt: string;
+  updatedAt: string;
+}
 
 const setStudentAccountsCache = (accounts: StudentAccount[]) => {
   localStorage.setItem(STORAGE_KEYS.STUDENT_ACCOUNTS, JSON.stringify(accounts));
@@ -132,6 +144,133 @@ const ensureFirebaseAuthSession = async () => {
   await signInAnonymously(firebaseAuth);
 };
 
+const generateDeviceId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `dev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
+export const getOrCreateDeviceId = () => {
+  const existing = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+  if (existing) {
+    return existing;
+  }
+  const created = generateDeviceId();
+  localStorage.setItem(STORAGE_KEYS.DEVICE_ID, created);
+  return created;
+};
+
+const getBoundStudentIdLocal = () => localStorage.getItem(STORAGE_KEYS.DEVICE_BOUND_STUDENT_ID) || '';
+
+const setBoundStudentIdLocal = (studentId: string) => {
+  if (!studentId) {
+    localStorage.removeItem(STORAGE_KEYS.DEVICE_BOUND_STUDENT_ID);
+    return;
+  }
+  localStorage.setItem(STORAGE_KEYS.DEVICE_BOUND_STUDENT_ID, studentId);
+};
+
+const getDeviceBindingRef = (deviceId: string) => doc(firebaseDb, DEVICE_BINDINGS_COLLECTION, deviceId);
+
+const bindOrValidateDeviceForStudent = async (
+  studentId: string,
+  user: Pick<User, 'id' | 'email'>
+): Promise<{ ok: boolean; message?: string }> => {
+  const normalizedStudentId = studentId.trim();
+  const deviceId = getOrCreateDeviceId();
+  const ref = getDeviceBindingRef(deviceId);
+  const nowIso = new Date().toISOString();
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    const payload: DeviceBinding = {
+      deviceId,
+      studentId: normalizedStudentId,
+      userId: user.id,
+      email: user.email,
+      boundAt: nowIso,
+      updatedAt: nowIso,
+    };
+    await setDoc(ref, payload);
+    setBoundStudentIdLocal(normalizedStudentId);
+    return { ok: true };
+  }
+
+  const data = snap.data() as Partial<DeviceBinding>;
+  const boundStudentId = String(data.studentId || '').trim();
+  if (boundStudentId && boundStudentId !== normalizedStudentId) {
+    return {
+      ok: false,
+      message: `Thiết bị này đã bị khóa với MSSV ${boundStudentId}. Không thể đăng nhập MSSV khác.`,
+    };
+  }
+
+  await updateDoc(ref, {
+    studentId: normalizedStudentId,
+    userId: user.id,
+    email: user.email,
+    updatedAt: nowIso,
+  });
+  setBoundStudentIdLocal(normalizedStudentId);
+  return { ok: true };
+};
+
+const resolveStudentIdFromUserId = async (userId: string): Promise<string> => {
+  if (userId.startsWith('sv_')) {
+    return userId.replace(/^sv_/, '');
+  }
+  const accounts = await getStudentAccountsFromFirebase();
+  return accounts.find((account) => account.userId === userId)?.studentId || '';
+};
+
+const verifyDeviceLockForUserId = async (userId: string): Promise<{ ok: boolean; message?: string }> => {
+  await ensureFirebaseAuthSession();
+  const deviceId = getOrCreateDeviceId();
+  const snap = await getDoc(getDeviceBindingRef(deviceId));
+  if (!snap.exists()) {
+    return { ok: false, message: 'Thiết bị chưa được liên kết. Vui lòng đăng nhập lại.' };
+  }
+
+  const data = snap.data() as Partial<DeviceBinding>;
+  const boundStudentId = String(data.studentId || '').trim();
+  const userStudentId = await resolveStudentIdFromUserId(userId);
+
+  if (!boundStudentId || !userStudentId || boundStudentId !== userStudentId) {
+    return { ok: false, message: 'Thiết bị đang bị khóa với tài khoản khác.' };
+  }
+
+  setBoundStudentIdLocal(boundStudentId);
+  return { ok: true };
+};
+
+export const getCurrentDeviceBinding = async (): Promise<{ deviceId: string; studentId: string | null }> => {
+  const deviceId = getOrCreateDeviceId();
+  const snap = await getDoc(getDeviceBindingRef(deviceId));
+  if (!snap.exists()) {
+    return { deviceId, studentId: null };
+  }
+  const data = snap.data() as Partial<DeviceBinding>;
+  const studentId = String(data.studentId || '').trim() || null;
+  if (studentId) {
+    setBoundStudentIdLocal(studentId);
+  }
+  return { deviceId, studentId };
+};
+
+export const resetDeviceBindingByAdmin = async (deviceId: string): Promise<boolean> => {
+  const normalized = deviceId.trim();
+  if (!normalized) {
+    return false;
+  }
+  await deleteDoc(getDeviceBindingRef(normalized));
+  const localDeviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+  if (localDeviceId === normalized) {
+    setBoundStudentIdLocal('');
+  }
+  return true;
+};
+
 export const initializeMockData = () => {
   // Firebase-only mode: do not seed any mock data.
 };
@@ -166,6 +305,15 @@ export const login = async (studentId: string, password: string): Promise<User |
     role: 'user',
     password: account.password,
   };
+
+  await ensureFirebaseAuthSession();
+  const lockCheck = await bindOrValidateDeviceForStudent(normalizedStudentId, {
+    id: user.id,
+    email: user.email,
+  });
+  if (!lockCheck.ok) {
+    throw new Error(lockCheck.message || 'Thiết bị đã bị khóa với tài khoản khác');
+  }
 
   localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
   return user;
@@ -762,6 +910,11 @@ export const createRecord = async (
   userId: string,
   sessionOverride?: AttendanceSession
 ): Promise<{ success: boolean; message: string; record?: AttendanceRecord }> => {
+  const deviceLock = await verifyDeviceLockForUserId(userId);
+  if (!deviceLock.ok) {
+    return { success: false, message: deviceLock.message || 'Thiết bị bị khóa với tài khoản khác' };
+  }
+
   const session =
     sessionOverride || (await getSessionsFromFirebase()).find((item) => item.id === sessionId) || null;
 

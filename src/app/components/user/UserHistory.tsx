@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { getCurrentUser, getRecordsFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
+import { getCurrentUser, getRecordsByUserFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
 import { CheckCircle, Calendar, Clock, Search, Filter } from 'lucide-react';
 import type { AttendanceRecord } from '../../utils/mockData';
 import { formatDateVN, formatTimeVN, isSameDayVN, isSameMonthVN } from '../../utils/dateTime';
@@ -19,12 +19,10 @@ export function UserHistory() {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
 
-      const [allRecords, sessions] = await Promise.all([
-        getRecordsFromFirebase(),
+      const [userRecords, sessions] = await Promise.all([
+        getRecordsByUserFromFirebase(currentUser.id),
         getSessionsFromFirebase(),
       ]);
-
-      const userRecords = allRecords.filter((record) => record.userId === currentUser.id);
 
       const recordsWithSession = userRecords
         .map((record) => {

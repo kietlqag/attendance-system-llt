@@ -2,7 +2,7 @@
 import { Link } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { getCurrentUser, getRecordsFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
+import { getCurrentUser, getRecordsByUserFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
 import { QrCode, CheckCircle, Clock } from 'lucide-react';
 import { formatDateTimeVN, isSameDayVN, isSameMonthVN } from '../../utils/dateTime';
 
@@ -15,11 +15,10 @@ export function UserDashboard() {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
 
-      const [allRecords, sessions] = await Promise.all([
-        getRecordsFromFirebase(),
+      const [records, sessions] = await Promise.all([
+        getRecordsByUserFromFirebase(currentUser.id),
         getSessionsFromFirebase(),
       ]);
-      const records = allRecords.filter((record) => record.userId === currentUser.id);
 
       const now = new Date();
       const todayCount = records.filter((r) => isSameDayVN(r.timestamp, now)).length;

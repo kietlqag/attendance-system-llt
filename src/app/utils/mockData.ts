@@ -858,6 +858,30 @@ export const getRecordsFromFirebase = async (): Promise<AttendanceRecord[]> => {
   return records;
 };
 
+export const getRecordsByUserFromFirebase = async (userId: string): Promise<AttendanceRecord[]> => {
+  const recordsQuery = query(collection(firebaseDb, RECORDS_COLLECTION), where('userId', '==', userId));
+  const snapshot = await getDocs(recordsQuery);
+
+  const records: AttendanceRecord[] = snapshot.docs.map((recordDoc) => {
+    const data = recordDoc.data() as {
+      sessionId: string;
+      userId: string;
+      timestamp: unknown;
+      status: AttendanceRecord['status'];
+    };
+
+    return {
+      id: recordDoc.id,
+      sessionId: data.sessionId,
+      userId: data.userId,
+      timestamp: toDateValue(data.timestamp),
+      status: data.status,
+    };
+  });
+
+  return records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+};
+
 export const getRecordsBySessionFromFirebase = async (sessionId: string): Promise<AttendanceRecord[]> => {
   const recordsQuery = query(collection(firebaseDb, RECORDS_COLLECTION), where('sessionId', '==', sessionId));
   const snapshot = await getDocs(recordsQuery);

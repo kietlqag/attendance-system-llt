@@ -4,6 +4,7 @@ import { getCurrentUser, getStudentAccountsFromFirebase, logout, type StudentAcc
 import { Button } from '../ui/button';
 import { LogOut, Home, QrCode, History, Menu, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { AppCopyright } from '../AppCopyright';
 
 export function UserLayout() {
   const navigate = useNavigate();
@@ -127,8 +128,13 @@ export function UserLayout() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <Outlet />
+          <div className="min-h-full flex flex-col">
+            <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
+              <Outlet />
+            </div>
+            <div className="px-4 sm:px-6 lg:px-8 pb-6">
+              <AppCopyright />
+            </div>
           </div>
         </main>
       </div>

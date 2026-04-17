@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
+﻿import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -18,6 +18,7 @@ export function ScanQR() {
   const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   const [scanning, setScanning] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'manual'>('scan');
+  const handledScanRef = useRef(false);
 
   const canUseCamera = useMemo(() => {
     if (typeof window === 'undefined') return true;
@@ -43,7 +44,7 @@ export function ScanQR() {
 
     const bootScanner = async () => {
       if (!canUseCamera) {
-        toast.error('Camera chỉ hoạt động trên HTTPS hoặc localhost.');
+        toast.error('Camera chi hoat dong tren HTTPS hoac localhost.');
         setScanning(false);
         return;
       }
@@ -51,7 +52,7 @@ export function ScanQR() {
       try {
         const cameras = await Html5Qrcode.getCameras();
         if (!cameras || cameras.length === 0) {
-          toast.error('Không tìm thấy camera trên thiết bị này. Vui lòng nhập mã thủ công.');
+          toast.error('Khong tim thay camera tren thiet bi nay. Vui long nhap ma thu cong.');
           setScanning(false);
           return;
         }
@@ -60,6 +61,12 @@ export function ScanQR() {
       }
 
       try {
+        if (!document.getElementById(SCANNER_ELEMENT_ID)) {
+          toast.error('Khong the tai vung quet QR. Vui long thu lai.');
+          setScanning(false);
+          return;
+        }
+
         const instance = new Html5Qrcode(SCANNER_ELEMENT_ID);
         if (cancelled) return;
 
@@ -72,8 +79,16 @@ export function ScanQR() {
             aspectRatio: 1,
           },
           (decodedText) => {
-            void handleAttendance(decodedText);
-            void instance.stop().then(() => {
+            if (handledScanRef.current) {
+              return;
+            }
+            handledScanRef.current = true;
+
+            void handleAttendance(decodedText).finally(() => {
+              void instance.stop().catch(() => undefined).then(() => {
+                void instance.clear().catch(() => undefined);
+              });
+              setScanner((current) => (current === instance ? null : current));
               setScanning(false);
             });
           },
@@ -84,11 +99,11 @@ export function ScanQR() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.toLowerCase().includes('permission')) {
-          toast.error('Trình duyệt chưa cấp quyền camera. Hãy cho phép camera rồi thử lại.');
+          toast.error('Trinh duyet chua cap quyen camera. Hay cho phep camera roi thu lai.');
         } else if (message.toLowerCase().includes('secure')) {
-          toast.error('Camera yêu cầu HTTPS hoặc localhost.');
+          toast.error('Camera yeu cau HTTPS hoac localhost.');
         } else {
-          toast.error('Không thể khởi động camera. Vui lòng nhập mã thủ công.');
+          toast.error('Khong the khoi dong camera. Vui long nhap ma thu cong.');
         }
         setScanning(false);
       }
@@ -102,6 +117,8 @@ export function ScanQR() {
   }, [scanning, activeTab, canUseCamera]);
 
   const stopScanner = async () => {
+    handledScanRef.current = false;
+
     if (!scanner) {
       setScanning(false);
       return;
@@ -124,7 +141,7 @@ export function ScanQR() {
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) {
-        toast.error('Vui lòng đăng nhập lại');
+        toast.error('Vui long dang nhap lai');
         return;
       }
 
@@ -135,17 +152,17 @@ export function ScanQR() {
         const errorCode = (error as { code?: string } | null)?.code;
         const message =
           errorCode === 'auth/admin-restricted-operation'
-            ? 'Firebase chưa bật Anonymous Auth cho sinh viên.'
+            ? 'Firebase chua bat Anonymous Auth cho sinh vien.'
             : errorCode === 'permission-denied'
-            ? 'Firestore rules chưa cho phép sinh viên truy cập phiên điểm danh.'
-            : 'Không thể truy cập dữ liệu điểm danh. Vui lòng thử lại.';
+            ? 'Firestore rules chua cho phep sinh vien truy cap phien diem danh.'
+            : 'Khong the truy cap du lieu diem danh. Vui long thu lai.';
         setResult({ success: false, message });
         toast.error(message);
         return;
       }
 
       if (!session) {
-        const message = 'Mã điểm danh không hợp lệ';
+        const message = 'Ma diem danh khong hop le';
         setResult({ success: false, message });
         toast.error(message);
         return;
@@ -163,7 +180,7 @@ export function ScanQR() {
         toast.error(attendanceResult.message);
       }
     } catch {
-      const message = 'Yêu cầu điểm danh thất bại. Vui lòng thử lại.';
+      const message = 'Yeu cau diem danh that bai. Vui long thu lai.';
       setResult({ success: false, message });
       toast.error(message);
     } finally {
@@ -174,13 +191,14 @@ export function ScanQR() {
   const handleManualSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!manualToken.trim()) {
-      toast.error('Vui lòng nhập mã điểm danh');
+      toast.error('Vui long nhap ma diem danh');
       return;
     }
     await handleAttendance(manualToken.trim());
   };
 
   const startScanner = () => {
+    handledScanRef.current = false;
     setResult(null);
     setScanning(true);
   };
@@ -202,7 +220,7 @@ export function ScanQR() {
               </div>
               <div className="flex-1">
                 <h3 className={`text-lg font-semibold mb-1 ${result.success ? 'text-primary' : 'text-destructive'}`}>
-                  {result.success ? 'Điểm danh thành công!' : 'Điểm danh thất bại'}
+                  {result.success ? 'Diem danh thanh cong!' : 'Diem danh that bai'}
                 </h3>
                 <p className="text-muted-foreground">{result.message}</p>
               </div>
@@ -215,7 +233,7 @@ export function ScanQR() {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="scan" className="gap-2">
             <Camera className="w-4 h-4" />
-            Quét QR Code
+            Quet QR Code
           </TabsTrigger>
           <TabsTrigger
             value="manual"
@@ -225,7 +243,7 @@ export function ScanQR() {
             }}
           >
             <Keyboard className="w-4 h-4" />
-            Nhập mã
+            Nhap ma
           </TabsTrigger>
         </TabsList>
 
@@ -234,7 +252,7 @@ export function ScanQR() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="w-5 h-5" />
-                Quét QR Code
+                Quet QR Code
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -244,13 +262,13 @@ export function ScanQR() {
                     <div className="w-24 h-24 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
                       <QrCode className="w-12 h-12 text-primary" />
                     </div>
-                    <p className="text-muted-foreground text-center mb-6">Nhấn nút bên dưới để bật camera và quét mã QR</p>
+                    <p className="text-muted-foreground text-center mb-6">Nhan nut ben duoi de bat camera va quet ma QR</p>
                     <Button onClick={startScanner} size="lg" className="gap-2" disabled={!canUseCamera}>
                       <Camera className="w-5 h-5" />
-                      Bật camera
+                      Bat camera
                     </Button>
                     {!canUseCamera && (
-                      <p className="text-xs text-destructive mt-3 text-center">Camera yêu cầu HTTPS (hoặc localhost).</p>
+                      <p className="text-xs text-destructive mt-3 text-center">Camera yeu cau HTTPS (hoac localhost).</p>
                     )}
                   </div>
                 </div>
@@ -258,7 +276,7 @@ export function ScanQR() {
                 <div className="space-y-4">
                   <div id={SCANNER_ELEMENT_ID} className="rounded-lg overflow-hidden min-h-[320px]" />
                   <Button onClick={() => void stopScanner()} variant="outline" className="w-full">
-                    Dừng quét
+                    Dung quet
                   </Button>
                 </div>
               )}
@@ -271,13 +289,13 @@ export function ScanQR() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Keyboard className="w-5 h-5" />
-                Nhập mã thủ công
+                Nhap ma thu cong
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleManualSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="token">Mã điểm danh</Label>
+                  <Label htmlFor="token">Ma diem danh</Label>
                   <Input
                     id="token"
                     placeholder="VD: ATT-2026-001"
@@ -286,11 +304,11 @@ export function ScanQR() {
                     className="bg-input-background text-lg font-mono tracking-wider"
                     required
                   />
-                  <p className="text-sm text-muted-foreground">Nhập chính xác mã điểm danh được hiển thị trên màn hình</p>
+                  <p className="text-sm text-muted-foreground">Nhap chinh xac ma diem danh duoc hien thi tren man hinh</p>
                 </div>
 
                 <Button type="submit" className="w-full" size="lg" disabled={submitting}>
-                  {submitting ? 'Đang xử lý...' : 'Điểm danh'}
+                  {submitting ? 'Dang xu ly...' : 'Diem danh'}
                 </Button>
               </form>
             </CardContent>

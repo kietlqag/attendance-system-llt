@@ -4,8 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { getCurrentUser, getRecordsFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
 import { QrCode, CheckCircle, Clock } from 'lucide-react';
-import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { formatDateTimeVN, isSameDayVN, isSameMonthVN } from '../../utils/dateTime';
 
 export function UserDashboard() {
   const [recentAttendance, setRecentAttendance] = useState<any[]>([]);
@@ -23,11 +22,8 @@ export function UserDashboard() {
       const records = allRecords.filter((record) => record.userId === currentUser.id);
 
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const todayCount = records.filter((r) => r.timestamp >= todayStart).length;
-      const monthCount = records.filter((r) => r.timestamp >= monthStart).length;
+      const todayCount = records.filter((r) => isSameDayVN(r.timestamp, now)).length;
+      const monthCount = records.filter((r) => isSameMonthVN(r.timestamp, now)).length;
 
       const recent = records
         .slice()
@@ -110,7 +106,7 @@ export function UserDashboard() {
                     <div>
                       <p className="font-medium">{record.sessionName}</p>
                       <p className="text-sm text-muted-foreground">
-                        {format(record.timestamp, 'HH:mm - dd/MM/yyyy', { locale: vi })}
+                        {formatDateTimeVN(record.timestamp)}
                       </p>
                     </div>
                   </div>

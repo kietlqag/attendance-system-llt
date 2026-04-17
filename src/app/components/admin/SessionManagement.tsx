@@ -33,6 +33,7 @@ import {
 import { Calendar, CheckCircle, ChevronRight, Clock, Pencil, Plus, Trash2, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AttendanceSession, Group } from '../../utils/mockData';
+import { formatDateTimeVN } from '../../utils/dateTime';
 
 const toLocalDateTimeInputValue = (value: Date | string) => {
   const date = new Date(value);
@@ -98,7 +99,7 @@ export function SessionManagement() {
     return group?.name || 'Không xác định';
   };
 
-  const formatDateTime = (value: Date | string) => new Date(value).toLocaleString('vi-VN');
+  const formatDateTime = formatDateTimeVN;
 
   const getStatusBadge = (session: AttendanceSession) => {
     const now = new Date();

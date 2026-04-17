@@ -1,7 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { format } from 'date-fns';
-import { vi } from 'date-fns/locale';
 import { QRCodeSVG } from 'qrcode.react';
 import { Calendar, Clock, Copy, Download, QrCode, Users, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,6 +17,7 @@ import {
   subscribeRecordsBySession,
 } from '../../utils/mockData';
 import type { AttendanceRecord, AttendanceSession, StudentAccount, Group } from '../../utils/mockData';
+import { formatDateTimeVN, formatDateVN, formatHourMinuteVN } from '../../utils/dateTime';
 
 export function SessionDetail() {
   const { sessionId } = useParams();
@@ -158,7 +157,7 @@ export function SessionDetail() {
         resolveStudentId(record),
         user?.name || 'N/A',
         user?.email || 'N/A',
-        format(record.timestamp, 'HH:mm:ss dd/MM/yyyy', { locale: vi }),
+        formatDateTimeVN(record.timestamp),
         record.status === 'valid' ? 'Hợp lệ' : 'Không hợp lệ',
       ];
     });
@@ -207,8 +206,7 @@ export function SessionDetail() {
                 <span className="text-sm">Thời gian bắt đầu</span>
               </div>
               <p className="font-semibold">
-                {format(session.startTime, 'HH:mm', { locale: vi })} -{' '}
-                <span className="font-semibold text-sm">{format(session.startTime, 'dd/MM/yyyy', { locale: vi })}</span>
+                {formatHourMinuteVN(session.startTime)} - <span className="font-semibold text-sm">{formatDateVN(session.startTime)}</span>
               </p>
             </div>
 
@@ -218,8 +216,7 @@ export function SessionDetail() {
                 <span className="text-sm">Thời gian kết thúc</span>
               </div>
               <p className="font-semibold">
-                {format(session.endTime, 'HH:mm', { locale: vi })} -{' '}
-                <span className="font-semibold text-sm">{format(session.endTime, 'dd/MM/yyyy', { locale: vi })}</span>
+                {formatHourMinuteVN(session.endTime)} - <span className="font-semibold text-sm">{formatDateVN(session.endTime)}</span>
               </p>
             </div>
 
@@ -310,7 +307,7 @@ export function SessionDetail() {
                         <TableCell className="font-medium">{user?.name || 'N/A'}</TableCell>
                         <TableCell className="text-muted-foreground">{user?.email || 'N/A'}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {format(record.timestamp, 'HH:mm:ss dd/MM/yyyy', { locale: vi })}
+                          {formatDateTimeVN(record.timestamp)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Badge variant={record.status === 'valid' ? 'default' : 'destructive'}>

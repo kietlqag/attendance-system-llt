@@ -7,7 +7,8 @@ import { Label } from './ui/label';
 import { UserCircle, Lock } from 'lucide-react';
 import { login, getCurrentUser } from '../utils/mockData';
 import { toast } from 'sonner';
-import coverLogin from '../../assets/coverlogin.jpg';
+import cumLogo from '../../assets/CumLogo.png';
+import { AppCopyright } from './AppCopyright';
 
 export function LoginPage() {
   const [studentId, setStudentId] = useState('');
@@ -45,14 +46,12 @@ export function LoginPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-start justify-center pt-16 pb-12 px-4 md:px-6 bg-center bg-no-repeat relative"
-      style={{ minHeight: '100vh', backgroundImage: `url(${coverLogin})`, backgroundSize: 'cover', backgroundPosition: 'center 30%' }}
-    >
-      <div className="absolute inset-0 bg-black/45" />
-
-      <div className="w-full max-w-[460px] relative z-10">
-        <Card className="border border-white/25 bg-white/60 backdrop-blur-sm shadow-xl">
+    <div className="min-h-screen flex items-start justify-center pt-16 pb-12 px-4 md:px-6 bg-slate-100">
+      <div className="w-full max-w-[460px] space-y-4">
+        <div className="flex justify-center">
+          <img src={cumLogo} alt="CUM Logo" className="h-16 w-auto md:h-20" />
+        </div>
+        <Card className="border border-slate-200 bg-white shadow-xl">
           <CardHeader className="space-y-1 pb-3 text-center">
             <CardTitle className="text-xl">Đăng nhập</CardTitle>
           </CardHeader>
@@ -96,6 +95,7 @@ export function LoginPage() {
             </form>
           </CardContent>
         </Card>
+        <AppCopyright />
       </div>
     </div>
   );

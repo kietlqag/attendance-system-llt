@@ -5,9 +5,8 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { getCurrentUser, getRecordsFromFirebase, getSessionsFromFirebase } from '../../utils/mockData';
 import { CheckCircle, Calendar, Clock, Search, Filter } from 'lucide-react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { vi } from 'date-fns/locale';
 import type { AttendanceRecord } from '../../utils/mockData';
+import { formatDateVN, formatTimeVN, isSameDayVN, isSameMonthVN } from '../../utils/dateTime';
 
 export function UserHistory() {
   const [records, setRecords] = useState<(AttendanceRecord & { sessionName: string })[]>([]);
@@ -53,16 +52,13 @@ export function UserHistory() {
 
     if (filterPeriod !== 'all') {
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const monthStart = startOfMonth(now);
-      const monthEnd = endOfMonth(now);
 
       switch (filterPeriod) {
         case 'today':
-          filtered = filtered.filter((r) => r.timestamp >= todayStart);
+          filtered = filtered.filter((r) => isSameDayVN(r.timestamp, now));
           break;
         case 'thisMonth':
-          filtered = filtered.filter((r) => r.timestamp >= monthStart && r.timestamp <= monthEnd);
+          filtered = filtered.filter((r) => isSameMonthVN(r.timestamp, now));
           break;
       }
     }
@@ -72,7 +68,7 @@ export function UserHistory() {
 
   const groupedRecords: Record<string, typeof filteredRecords> = {};
   filteredRecords.forEach((record) => {
-    const dateKey = format(record.timestamp, 'dd/MM/yyyy', { locale: vi });
+    const dateKey = formatDateVN(record.timestamp);
     if (!groupedRecords[dateKey]) {
       groupedRecords[dateKey] = [];
     }
@@ -146,7 +142,7 @@ export function UserHistory() {
                           <p className="font-medium truncate">{record.sessionName}</p>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                             <Clock className="w-3.5 h-3.5" />
-                            {format(record.timestamp, 'HH:mm:ss', { locale: vi })}
+                            {formatTimeVN(record.timestamp)}
                           </div>
                         </div>
                       </div>

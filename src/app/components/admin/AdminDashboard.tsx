@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { getGroupsFromFirebase, getSessionsFromFirebase, getStudentAccountsFromFirebase } from '../../utils/mockData';
 import { Calendar, ChevronRight, Clock, QrCode, Users } from 'lucide-react';
 import type { AttendanceSession, Group, StudentAccount } from '../../utils/mockData';
+import { formatDateTimeVN } from '../../utils/dateTime';
 
 export function AdminDashboard() {
   const [sessions, setSessions] = useState<AttendanceSession[]>([]);
@@ -36,7 +37,7 @@ export function AdminDashboard() {
 
   const activeSessions = sessions.filter((s) => new Date() <= new Date(s.endTime)).length;
   const totalMembers = studentAccounts.length;
-  const formatDateTime = (value: Date | string) => new Date(value).toLocaleString('vi-VN');
+  const formatDateTime = formatDateTimeVN;
 
   return (
     <div className="space-y-8">

@@ -7,6 +7,7 @@
   getDocs,
   onSnapshot,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -712,8 +713,8 @@ export const createSession = async (
   const ref = await addDoc(collection(firebaseDb, SESSIONS_COLLECTION), {
     name: session.name,
     token,
-    startTime: session.startTime.toISOString(),
-    endTime: session.endTime.toISOString(),
+    startTime: session.startTime,
+    endTime: session.endTime,
     groupId: session.groupId,
     createdBy: session.createdBy,
     status: session.status,
@@ -749,8 +750,8 @@ export const updateSession = async (
   await updateDoc(doc(firebaseDb, SESSIONS_COLLECTION, sessionId), {
     name: updates.name,
     groupId: updates.groupId,
-    startTime: updates.startTime.toISOString(),
-    endTime: updates.endTime.toISOString(),
+    startTime: updates.startTime,
+    endTime: updates.endTime,
     status,
   });
 
@@ -895,13 +896,20 @@ export const addRecordToFirestore = async (
   const ref = await addDoc(collection(firebaseDb, RECORDS_COLLECTION), {
     sessionId: record.sessionId,
     userId: record.userId,
-    timestamp: record.timestamp.toISOString(),
+    timestamp: serverTimestamp(),
     status: record.status,
   });
+
+  const snapshot = await getDoc(ref);
+  const rawTimestamp = snapshot.exists()
+    ? (snapshot.data() as { timestamp?: unknown }).timestamp
+    : undefined;
+  const savedTimestamp = rawTimestamp ? toDateValue(rawTimestamp) : record.timestamp;
 
   return {
     id: ref.id,
     ...record,
+    timestamp: savedTimestamp,
   };
 };
 
